@@ -1,5 +1,6 @@
+#!/usr/bin/env python3
+
 import requests
-import json
 import sys
 import base64
 
@@ -60,6 +61,10 @@ if __name__ == "__main__":
     elif command == 'click':
         selector = args[0]
         response = send_request('click', 'POST', {'selector': selector})
+        print(response['message'])
+    elif command == 'click2':
+        selector = args[0]
+        response = send_request('click2', 'POST', {'selector': selector})
         print(response['message'])
     elif command == 'type':
         selector = args[0]

@@ -1,3 +1,7 @@
+#!/usr/bin/env python3
+
+from pathlib import Path
+import time
 from flask import Flask, request, jsonify
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -12,13 +16,22 @@ app = Flask(__name__)
 # Global variable to store the browser instance
 browser = None
 
-def get_browser():
+VIMIUM_PATH_DEFAULT = Path("./vimium-master")
+
+def get_browser(*, vimium_extension_path=VIMIUM_PATH_DEFAULT):
     global browser
     if browser is None:
+        if not vimium_extension_path.exists():
+            raise FileNotFoundError(
+                f"Vimium extension path not found: {vimium_extension_path}. "
+                "Please follow instructions in readme to first download it."
+            )
         options = webdriver.ChromeOptions()
         options.add_argument('--headless')
         options.add_argument('--no-sandbox')
         options.add_argument('--disable-dev-shm-usage')
+        options.add_argument(f"--disable-extensions-except={vimium_extension_path}")
+        options.add_argument(f"--load-extension={vimium_extension_path}")
         browser = webdriver.Chrome(options=options)
     return browser
 
@@ -38,13 +51,28 @@ def close_website():
         return jsonify({"status": "success", "message": "Closed browser"})
     return jsonify({"status": "error", "message": "No open windows"})
 
+
+def _activate_vimium_overlay():
+    webdriver.ActionChains(browser).send_keys(Keys.ESCAPE).perform()
+    webdriver.ActionChains(browser).send_keys(Keys.ESCAPE).perform()
+    webdriver.ActionChains(browser).send_keys('f').perform()
+    time.sleep(0.1)
+
+def _deactivate_vimium_overlay():
+    webdriver.ActionChains(browser).send_keys(Keys.ESCAPE).perform()
+    webdriver.ActionChains(browser).send_keys(Keys.ESCAPE).perform()
+
+
 @app.route('/screenshot', methods=['GET'])
 def take_screenshot():
     browser = get_browser()
-    if browser:
-        screenshot = browser.get_screenshot_as_base64()
-        return jsonify({"status": "success", "screenshot": screenshot})
-    return jsonify({"status": "error", "message": "No open windows"})
+    if not browser:
+        return jsonify({"status": "error", "message": "No open windows"})
+    # Make sure to get overlays from vimum
+    _activate_vimium_overlay()
+    screenshot = browser.get_screenshot_as_base64()
+    _deactivate_vimium_overlay()
+    return jsonify({"status": "success", "screenshot": screenshot})
 
 @app.route('/click', methods=['POST'])
 def click_element():
@@ -58,6 +86,18 @@ def click_element():
         return jsonify({"status": "success", "message": f"Clicked element {selector}"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/click2', methods=['POST'])
+def click_vimium():
+    selector = request.json['selector']
+    browser = get_browser()
+    if not browser:
+        return jsonify({"status": "error", "message": "No open windows"})
+    _activate_vimium_overlay()
+    webdriver.ActionChains(browser).send_keys(selector).perform()
+    return jsonify({"status": "success", "message": f"Clicked element {selector}"})
+
 
 @app.route('/type', methods=['POST'])
 def type_text():
