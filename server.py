@@ -38,6 +38,8 @@ def get_browser(*, vimium_extension_path=VIMIUM_PATH_DEFAULT):
 @app.route('/open', methods=['POST'])
 def open_website():
     url = request.json['url']
+    if "://" not in url:
+        url = "https://" + url
     browser = get_browser()
     browser.get(url)
     return jsonify({"status": "success", "message": f"Opened {url}"})
