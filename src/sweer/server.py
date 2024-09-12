@@ -45,12 +45,23 @@ def require_website_open(func):
     def wrapper(*args, **kwargs):
         if no_website_open(get_browser()):
             return jsonify({"status": "error", "message": "Please open a website first."})
-        print("open alright")
         return func(*args, **kwargs)
     return wrapper
 
 
+def catch_error(func):
+    """Decorator to catch exceptions and return them as JSON."""
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            return jsonify({"status": "error", "message": str(e)})
+    return wrapper
+
+
 @app.route("/open", methods=["POST"])
+@catch_error
 def open_website():
     url = request.json["url"]
     if "://" not in url:
@@ -128,12 +139,7 @@ def _click_selector(selector: str, *, confirmation_text=""):
     except TimeoutException:
         message = f"Element specified by the CSS selector {selector!r} not found or not clickable"
         return jsonify({"status": "error", "message": message})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
-    try:
-        element.click()
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+    element.click()
     confirmation_text = confirmation_text or f"Clicked element {selector}"
     return jsonify({"status": "success", "message": confirmation_text})
 
@@ -145,7 +151,6 @@ def _click_overlay(label: str):
     for overlay in OVERLAY_INFO:
         if label == overlay["label"]:
             selector = f"#{overlay['id']}"
-            print(selector)
             return _click_selector(selector, confirmation_text=f"Clicked on element with label {label}")
     message = (
         f"Overlay with label {label} not found. Here are the elements that can be clicked:\n\n" +
@@ -156,6 +161,7 @@ def _click_overlay(label: str):
 
 
 @app.route("/click", methods=["POST"])
+@catch_error
 @require_website_open
 def click_element():
     selector = request.json["selector"]
@@ -166,40 +172,37 @@ def click_element():
 
 @app.route("/type", methods=["POST"])
 @require_website_open
+@catch_error
 def type_text():
     browser = get_browser()
     selector = request.json["selector"]
     text = request.json["text"]
-    try:
-        element = WebDriverWait(browser, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, selector)))
-        element.send_keys(text)
-        return jsonify({"status": "success", "message": f"Typed '{text}' into {selector}"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+    element = WebDriverWait(browser, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, selector)))
+    element.send_keys(text)
+    return jsonify({"status": "success", "message": f"Typed '{text}' into {selector}"})
 
 
 @app.route("/scroll", methods=["POST"])
 @require_website_open
+@catch_error
 def scroll_page():
     browser = get_browser()
     direction = request.json["direction"]
     amount = request.json["amount"]
-    try:
-        if direction == "up":
-            browser.execute_script(f"window.scrollBy(0, -{amount});")
-        elif direction == "down":
-            browser.execute_script(f"window.scrollBy(0, {amount});")
-        elif direction == "left":
-            browser.execute_script(f"window.scrollBy(-{amount}, 0);")
-        elif direction == "right":
-            browser.execute_script(f"window.scrollBy({amount}, 0);")
-        return jsonify({"status": "success", "message": f"Scrolled {direction} by {amount}"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+    if direction == "up":
+        browser.execute_script(f"window.scrollBy(0, -{amount});")
+    elif direction == "down":
+        browser.execute_script(f"window.scrollBy(0, {amount});")
+    elif direction == "left":
+        browser.execute_script(f"window.scrollBy(-{amount}, 0);")
+    elif direction == "right":
+        browser.execute_script(f"window.scrollBy({amount}, 0);")
+    return jsonify({"status": "success", "message": f"Scrolled {direction} by {amount}"})
 
 
 @app.route("/get_text", methods=["POST"])
 @require_website_open
+@catch_error
 def get_text():
     selector = request.json["selector"]
     browser = get_browser()
@@ -207,17 +210,13 @@ def get_text():
         element = WebDriverWait(browser, LOCATE_ELEMENT_TIMEOUT).until(EC.presence_of_element_located((By.CSS_SELECTOR, selector)))
     except TimeoutException:
         return jsonify({"status": "error", "message": f"Element specified by the CSS selector {selector!r} not found"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
-    try:
-        text = element.text
-        return jsonify({"status": "success", "message": f"Text of element selected by {selector!r}: {text!r}"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+    text = element.text
+    return jsonify({"status": "success", "message": f"Text of element selected by {selector!r}: {text!r}"})
 
 
 @app.route("/get_attribute", methods=["POST"])
 @require_website_open
+@catch_error
 def get_attribute():
     selector = request.json["selector"]
     attribute = request.json["attribute"]
@@ -226,73 +225,60 @@ def get_attribute():
         element = WebDriverWait(browser, LOCATE_ELEMENT_TIMEOUT).until(EC.presence_of_element_located((By.CSS_SELECTOR, selector)))
     except TimeoutException:
         return jsonify({"status": "error", "message": f"Element specified by the CSS selector {selector!r} not found."})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
-    try:
-        value = element.get_attribute(attribute)
-        return jsonify({"status": "success", "message": f"Attribute {attribute} for the element specified by the CSS selector {selector!r}: {value!r}"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+    value = element.get_attribute(attribute)
+    return jsonify({"status": "success", "message": f"Attribute {attribute} for the element specified by the CSS selector {selector!r}: {value!r}"})
 
 
 @app.route("/execute_script", methods=["POST"])
+@require_website_open
+@catch_error
 def execute_script():
     browser = get_browser()
-    if no_website_open(browser):
-        return jsonify({"status": "error", "message": "Please open a website first before trying to execute a script."})
     script = request.json["script"]
-    try:
-        browser.execute_script(script)
-        return jsonify({"status": "success", "message": "Script executed successfully"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+    browser.execute_script(script)
+    return jsonify({"status": "success", "message": "Script executed successfully"})
 
 
 @app.route("/navigate", methods=["POST"])
+@catch_error
 @require_website_open
 def navigate():
     browser = get_browser()
     direction = request.json["direction"]
-    try:
-        if direction == "back":
-            browser.back()
-            if no_website_open(browser):
-                browser.forward()
-                return jsonify({"status": "error", "message": f"No more pages in history, still at {browser.current_url}."})
-        elif direction == "forward":
-            previous_url = browser.current_url
+    if direction == "back":
+        browser.back()
+        if no_website_open(browser):
             browser.forward()
-            if browser.current_url == previous_url:
-                return jsonify({"status": "error", "message": f"Already at the most recent page ({browser.current_url})."})
-        else:
-            return jsonify({"status": "error", "message": f"Invalid direction {direction}. Use 'back' or 'forward'."})
-        return jsonify({"status": "success", "message": f"Navigated {direction}"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+            return jsonify({"status": "error", "message": f"No more pages in history, still at {browser.current_url}."})
+    elif direction == "forward":
+        previous_url = browser.current_url
+        browser.forward()
+        if browser.current_url == previous_url:
+            return jsonify({"status": "error", "message": f"Already at the most recent page ({browser.current_url})."})
+    else:
+        return jsonify({"status": "error", "message": f"Invalid direction {direction}. Use 'back' or 'forward'."})
+    return jsonify({"status": "success", "message": f"Navigated {direction}"})
 
 
 @app.route("/reload", methods=["POST"])
+@catch_error
 @require_website_open
 def reload_page():
     browser = get_browser()
-    try:
-        browser.refresh()
-        return jsonify({"status": "success", "message": "Page reloaded"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+    browser.refresh()
+    return jsonify({"status": "success", "message": "Page reloaded"})
 
 
 @app.route("/list_elements", methods=["POST"])
+@catch_error
 @require_website_open
 def list_elements():
     selector = request.json["selector"]
     browser = get_browser()
-    try:
-        elements = browser.find_elements(By.CSS_SELECTOR, selector)
-        element_list = [element.get_attribute("outerHTML") for element in elements]
-        return jsonify({"status": "success", "elements": element_list})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+    elements = browser.find_elements(By.CSS_SELECTOR, selector)
+    element_list = [element.get_attribute("outerHTML") for element in elements]
+    return jsonify({"status": "success", "elements": element_list})
+
 
 def main():
     base_url = os.environ.get("SWEER_BASEURL", "http://localhost:8009")
