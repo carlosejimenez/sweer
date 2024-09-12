@@ -35,10 +35,18 @@ function drawShortcutOverlay(element, labelText) {
 
   const label = document.createElement("span");
   label.textContent = labelText;
+  let topOffset = -20;
+  let leftOffset = 0;
+  if (element.top < 20) {
+    topOffset = 0;
+    if (element.left > 20) {
+      leftOffset = -20;
+    }
+  }
   label.style.cssText = `
         position: absolute;
-        top: -20px;
-        left: 0px;
+        top: ${topOffset}px;
+        left: ${leftOffset}px;
         background: ${color};
         color: white;
         padding: 2px 4px;
