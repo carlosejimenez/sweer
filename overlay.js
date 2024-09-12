@@ -1,10 +1,22 @@
-// Heavily modified from the original code from SeeAct
+// Heavily modified from/inspired by from SeeAct
 // https://github.com/OSU-NLP-Group/SeeAct/blob/main/seeact_package/seeact/mark_page.js
 
 
 let labels = [];
 
 window.overlays = {}
+
+var idCounter = new Date().getTime();
+
+function getId( node ) {
+    // Get an ID of an object. If the object does not have an ID, assign one.
+    if (node.id) {
+        return node.id;
+    } else {
+        node.id = 'RANDOM_ID_' + idCounter++;
+        return node.id;
+    }
+}
 
 function drawShortcutOverlay(element, labelText) {
     const color = "#" + Math.floor(Math.random()*16777215).toString(16);
@@ -112,14 +124,13 @@ overlays.drawAllShortcutOverlays = function() {
         });
     });
 
-    const itemInfo = items.flatMap((item) =>
-        item.rects.map(({ left, top, width, height }) => ({
-            x: (left + left + width) / 2,
-            y: (top + top + height) / 2,
+    const itemInfo = items.flatMap((item) => ({
             type: item.type,
             text: item.text,
+            id: getId(item.element),
             ariaLabel: item.ariaLabel,
-        }))
+            class: item.element.className,
+        })
     );
 
     return itemInfo;
