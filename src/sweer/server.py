@@ -11,14 +11,15 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.common.exceptions import WebDriverException
+from selenium.common.exceptions import WebDriverException, TimeoutException
 
 app = Flask(__name__)
 
 # Global variable to store the browser instance
 BROWSER: None|WebDriver = None
 OVERLAY_INFO = None
-MAX_OVERLAY_INFO_TEXT_LENGTH = int(os.environ.get("MAX_OVERLAY_INFO_TEXT_LENGTH", 50))
+MAX_OVERLAY_INFO_TEXT_LENGTH = int(os.environ.get("SWEER_MAX_OVERLAY_INFO_TEXT_LENGTH", 50))
+LOCATE_ELEMENT_TIMEOUT = int(os.environ.get("SWEER_LOCATE_ELEMENT_TIMEOUT", 1))
 SCREENSHOT_INDEX = 0
 OVERLAY_SCRIPT_PATH = Path(__file__).parent / "overlay.js"
 
@@ -115,12 +116,18 @@ def take_screenshot():
 def _click_selector(selector: str, *, confirmation_text=""):
     browser = get_browser()
     try:
-        element = WebDriverWait(browser, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, selector)))
-        element.click()
-        confirmation_text = confirmation_text or f"Clicked element {selector}"
-        return jsonify({"status": "success", "message": confirmation_text})
+        element = WebDriverWait(browser, LOCATE_ELEMENT_TIMEOUT).until(EC.element_to_be_clickable((By.CSS_SELECTOR, selector)))
+    except TimeoutException:
+        message = f"Element specified by the CSS selector {selector!r} not found or not clickable"
+        return jsonify({"status": "error", "message": message})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
+    try:
+        element.click()
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+    confirmation_text = confirmation_text or f"Clicked element {selector}"
+    return jsonify({"status": "success", "message": confirmation_text})
 
 
 def _click_overlay(label: str):
@@ -132,7 +139,12 @@ def _click_overlay(label: str):
             selector = f"#{overlay['id']}"
             print(selector)
             return _click_selector(selector, confirmation_text=f"Clicked on element with label {label}")
-    return jsonify({"status": "error", "message": f"Overlay with label {label} not found"})
+    message = (
+        f"Overlay with label {label} not found. Here are the elements that can be clicked:\n\n" +
+        format_clickable_elements(OVERLAY_INFO) + 
+        "\nThe first column is the label."
+    )
+    return jsonify({"status": "error", "message": message})
 
 
 @app.route("/click", methods=["POST"])
@@ -140,7 +152,7 @@ def click_element():
     if no_website_open(get_browser()):
         return jsonify({"status": "error", "message": "Please open a website first before trying to click an element."})
     selector = request.json["selector"]
-    if len(selector) >= 3 or not selector.isnumeric():
+    if len(selector) >= 4 or not selector.isnumeric():
         return _click_selector(selector)
     return _click_overlay(selector)
 
@@ -188,7 +200,12 @@ def get_text():
     selector = request.json["selector"]
     browser = get_browser()
     try:
-        element = WebDriverWait(browser, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, selector)))
+        element = WebDriverWait(browser, LOCATE_ELEMENT_TIMEOUT).until(EC.presence_of_element_located((By.CSS_SELECTOR, selector)))
+    except TimeoutException:
+        return jsonify({"status": "error", "message": f"Element specified by the CSS selector {selector!r} not found"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+    try:
         text = element.text
         return jsonify({"status": "success", "text": text})
     except Exception as e:
@@ -203,7 +220,12 @@ def get_attribute():
     attribute = request.json["attribute"]
     browser = get_browser()
     try:
-        element = WebDriverWait(browser, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, selector)))
+        element = WebDriverWait(browser, LOCATE_ELEMENT_TIMEOUT).until(EC.presence_of_element_located((By.CSS_SELECTOR, selector)))
+    except TimeoutException:
+        return jsonify({"status": "error", "message": f"Element specified by the CSS selector {selector!r} not found"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+    try:
         value = element.get_attribute(attribute)
         return jsonify({"status": "success", "value": value})
     except Exception as e:
