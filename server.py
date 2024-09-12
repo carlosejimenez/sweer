@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 from __future__ import annotations
 
 import os
@@ -17,6 +18,7 @@ app = Flask(__name__)
 BROWSER: None|WebDriver = None
 OVERLAY_INFO = None
 MAX_OVERLAY_INFO_TEXT_LENGTH = int(os.environ.get("MAX_OVERLAY_INFO_TEXT_LENGTH", 50))
+SCREENSHOT_INDEX = 0
 
 
 def get_browser():
@@ -73,6 +75,8 @@ def format_clickable_elements(overlays: list[dict[str, str]], max_text_length=MA
     out = ""
     for overlay in overlays:
         out += f"{overlay['label'].rjust(3)} - "
+        if not overlay["id"].startswith("RANDOM_ID"):
+            out += f"ID={overlay['id']!r} "
         for key in ['type', 'class', 'text', 'ariaLabel']:
             if isinstance(overlay[key], str) and overlay[key].strip():
                 value_fmted = clean_text(overlay[key])
@@ -91,15 +95,18 @@ def take_screenshot():
     _deactivate_vimium_style_overlay(browser)
     global OVERLAY_INFO
     assert OVERLAY_INFO is not None
-    return jsonify({"status": "success", "screenshot": screenshot, "overlay_info": format_clickable_elements(OVERLAY_INFO)})
+    global SCREENSHOT_INDEX
+    SCREENSHOT_INDEX += 1
+    return jsonify({"status": "success", "screenshot": screenshot, "overlay_info": format_clickable_elements(OVERLAY_INFO), "screenshot_index": SCREENSHOT_INDEX})
 
 
-def _click_selector(selector: str):
+def _click_selector(selector: str, *, confirmation_text=""):
     browser = get_browser()
     try:
         element = WebDriverWait(browser, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, selector)))
         element.click()
-        return jsonify({"status": "success", "message": f"Clicked element {selector}"})
+        confirmation_text = confirmation_text or f"Clicked element {selector}"
+        return jsonify({"status": "success", "message": confirmation_text})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
@@ -112,7 +119,7 @@ def _click_overlay(label: str):
         if label == overlay["label"]:
             selector = f"#{overlay['id']}"
             print(selector)
-            return _click_selector(selector)
+            return _click_selector(selector, confirmation_text=f"Clicked on element with label {label}")
     return jsonify({"status": "error", "message": f"Overlay with label {label} not found"})
 
 

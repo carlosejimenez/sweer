@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+from enum import auto
 import os
 from pathlib import Path
 
@@ -11,6 +12,7 @@ import click as cl
 import requests
 
 BASE_URL = os.environ.get("SWEER_BASEURL", "http://localhost:8009")
+AUTOSCREENSHOT = os.environ.get("SWEER_AUTOSCREENSHOT", "0") == "1"
 
 
 def send_request(endpoint, method="GET", data=None):
@@ -33,6 +35,7 @@ def open(url):
     """Open the specified website URL."""
     response = send_request("open", "POST", {"url": url})
     print(response["message"])
+    autoscreenshot()
 
 
 @cli.command(short_help="Close the current window.")
@@ -42,21 +45,35 @@ def close():
     print(response["message"])
 
 
+def autoscreenshot():
+    if AUTOSCREENSHOT:
+        _screenshot()
+
+def _screenshot(output: str="") -> None:
+    response = requests.get(f"{BASE_URL}/screenshot")
+    if response.status_code != 200:
+        return
+    data = response.json()
+    if not output:
+        output = f"screenshot_{data['screenshot_index']:03}.png"
+    screenshot_data = data["screenshot"]
+    path = Path(output)
+    path.write_bytes(base64.b64decode(screenshot_data))
+    link_path = Path("latest_screenshot.png")
+    link_path.unlink(missing_ok=True)
+    link_path.symlink_to(path)
+    print(f"Screenshot saved to {path}")
+    overlay_info = data["overlay_info"]
+    if overlay_info:
+        print("Here is an overview of all clickable elements:")
+        print(overlay_info)
+
+
 @cli.command(short_help="Take a screenshot.")
-@cl.option("--output", "-o", default="screenshot.png", help="Output path for the screenshot.")
+@cl.option("--output", "-o", default=None, help="Output path for the screenshot.")
 def screenshot(output):
     """Capture a screenshot and save it to the specified output path."""
-    response = requests.get(f"{BASE_URL}/screenshot")
-    if response.status_code == 200:
-        data = response.json()
-        screenshot_data = data["screenshot"]
-        path = Path(output)
-        path.write_bytes(base64.b64decode(screenshot_data))
-        overlay_info = data["overlay_info"]
-        if overlay_info:
-            print("Here is an overview of all clickable elements:")
-            print(overlay_info)
-
+    _screenshot(output)
 
 @cli.command(short_help="Click on object")
 @cl.argument("selector")
@@ -64,6 +81,7 @@ def click(selector):
     """Click on an element specified by its selector."""
     response = send_request("click", "POST", {"selector": selector})
     print(response["message"])
+    autoscreenshot()
 
 
 @cli.command(short_help="Type text into an input field.")
@@ -73,6 +91,7 @@ def type(selector, text):
     """Type the given text into an element specified by its selector."""
     response = send_request("type", "POST", {"selector": selector, "text": text})
     print(response["message"])
+    autoscreenshot()
 
 
 @cli.command(short_help="Scroll the page.")
@@ -82,6 +101,7 @@ def scroll(direction, amount):
     """Scroll the page in the specified direction (up or down) by the given amount."""
     response = send_request("scroll", "POST", {"direction": direction, "amount": amount})
     print(response["message"])
+    autoscreenshot()
 
 
 @cli.command(short_help="Get text from an element.")
@@ -107,6 +127,7 @@ def execute_script(script):
     """Execute a custom JavaScript code snippet on the current page."""
     response = send_request("execute_script", "POST", {"script": script})
     print(response["message"])
+    autoscreenshot()
 
 
 @cli.command(short_help="Navigate through the browser history.")
@@ -115,6 +136,7 @@ def navigate(action):
     """Navigate using the specified action (e.g., 'back', 'forward')."""
     response = send_request(action, "POST")
     print(response["message"])
+    autoscreenshot()
 
 
 @cli.command(short_help="Reload the current page.")
@@ -122,6 +144,7 @@ def reload():
     """Reload the current webpage."""
     response = send_request("reload", "POST")
     print(response["message"])
+    autoscreenshot()
 
 
 @cli.command(short_help="List elements matching a selector.")
