@@ -19,6 +19,7 @@ BROWSER: None|WebDriver = None
 OVERLAY_INFO = None
 MAX_OVERLAY_INFO_TEXT_LENGTH = int(os.environ.get("MAX_OVERLAY_INFO_TEXT_LENGTH", 50))
 SCREENSHOT_INDEX = 0
+OVERLAY_SCRIPT_PATH = Path(__file__).parent / "overlay.js"
 
 
 def get_browser():
@@ -53,7 +54,7 @@ def close_website():
 
 
 def _activate_vimium_style_overlay(browser: WebDriver) -> None:
-    script = Path("overlay.js").read_text()
+    script = OVERLAY_SCRIPT_PATH.read_text()
     browser.execute_script(script)
     global OVERLAY_INFO
     OVERLAY_INFO = browser.execute_script("return overlays.drawAllShortcutOverlays();")

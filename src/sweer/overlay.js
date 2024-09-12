@@ -1,4 +1,4 @@
-// Heavily modified from/inspired by from SeeAct
+// Heavily modified from/inspired by SeeAct
 // https://github.com/OSU-NLP-Group/SeeAct/blob/main/seeact_package/seeact/mark_page.js
 
 let labels = [];
@@ -35,8 +35,12 @@ function drawShortcutOverlay(element, labelText) {
 
   const label = document.createElement("span");
   label.textContent = labelText;
+
+  // Position the label and be careful not to go off the screen
+  // default offsets
   let topOffset = -20;
   let leftOffset = 0;
+  // handle the case where we are too high up on the screen
   if (element.top < 20) {
     topOffset = 0;
     if (element.left > 20) {

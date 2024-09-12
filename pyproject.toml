@@ -3,6 +3,77 @@
 # Specification (technical, formal):
 # https://packaging.python.org/en/latest/specifications/pyproject-toml/
 
+# Choosing a build backend:
+[build-system]
+requires = ["setuptools"]  # REQUIRED if [build-system] table is used
+build-backend = "setuptools.build_meta"  # If not defined, then legacy behavior can happen.
+
+
+[project]
+name = "sweer"
+dynamic = ["version"]
+description = "ACI for websites"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {file = "LICENSE.md"}
+keywords = ["nlp", "agents", "code"]
+authors = [
+  {name = "Kilian Lieret", email = "kl5675@princeton.edu" },
+  {name = "Carlos E. Jimenez", email = "carlosej@princeton.edu" },
+]
+
+# Classifiers help users find your project by categorizing it.
+classifiers = [
+  "Operating System :: OS Independent",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3 :: Only",
+]
+
+dependencies = [
+    "flask",
+    "selenium",
+    "requests",
+    "click",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "pre-commit",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.dynamic]
+version = {attr = "sweer.__version__"}
+
+[tool.setuptools.packages.find]
+where = ["src/"]
+namespaces = false
+
+[tool.setuptools.package-data]
+mypkg = ["*.js", ]
+
+[project.urls]
+# "Homepage" = "https://swe-agent.com"
+# "Bug Reports" = "http://github.com/princeton-nlp/SWE-agent/issues"
+# "Documentation" = "https://github.com/princeton-nlp/SWE-agent"
+# "Source" = "http://github.com/princeton-nlp/SWE-agent"
+
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
+testpaths = [
+    "tests"
+]
+xfail_strict = true
+
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.
 exclude = [
