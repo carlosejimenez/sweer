@@ -66,7 +66,7 @@ def take_screenshot():
     _deactivate_vimium_style_overlay(browser)
     return jsonify({"status": "success", "screenshot": screenshot})
 
-def _click(selector: str):
+def _click_selector(selector: str):
     browser = get_browser()
     try:
         element = WebDriverWait(browser, 10).until(
@@ -77,25 +77,24 @@ def _click(selector: str):
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-
-@app.route('/click', methods=['POST'])
-def click_element():
-    selector = request.json['selector']
-    return _click(selector)
-
-
-@app.route('/click2', methods=['POST'])
-def click_element2():
+def _click_overlay(label: str):
     if not OVERLAY_INFO:
         return jsonify({"status": "error", "message": "Overlay info not found"})
-    label = request.json['selector']
     print(f"Searching for overlay with label {label}")
     for overlay in OVERLAY_INFO:
         if label == overlay["label"]:
             selector = f"#{overlay['id']}"
             print(selector)
-            return _click(selector)
+            return _click_selector(selector)
     return jsonify({"status": "error", "message": f"Overlay with label {label} not found"})
+
+
+@app.route('/click', methods=['POST'])
+def click_element():
+    selector = request.json['selector']
+    if len(selector) >= 3 or not selector.isnumeric():
+        return _click_selector(selector)
+    return _click_overlay(selector)
 
 
 @app.route('/type', methods=['POST'])
