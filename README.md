@@ -1,9 +1,9 @@
 # SWEer
 
-## Download vimium
+## Dev setup
 
 ```bash
-curl -o vimium-master.zip -L https://github.com/philc/vimium/archive/refs/heads/master.zip
-unzip vimium-master.zip
-rm vimium-master.zip
+pip install -r requirements.txt
+pip install pre-commit 
+pre-commit install
 ```

@@ -43,17 +43,22 @@ def close():
 
 
 @cli.command(short_help="Take a screenshot.")
-def screenshot():
-    """Capture a screenshot and save it as 'screenshot.png'."""
+@cl.option("--output", "-o", default="screenshot.png", help="Output path for the screenshot.")
+def screenshot(output):
+    """Capture a screenshot and save it to the specified output path."""
     response = requests.get(f"{BASE_URL}/screenshot")
     if response.status_code == 200:
-        screenshot_data = response.json()["screenshot"]
-        path = Path("screenshot.png")
+        data = response.json()
+        screenshot_data = data["screenshot"]
+        path = Path(output)
         path.write_bytes(base64.b64decode(screenshot_data))
-        print("Screenshot saved to screenshot.png")
+        overlay_info = data["overlay_info"]
+        if overlay_info:
+            print("Here is an overview of all clickable elements:")
+            print(overlay_info)
 
 
-@cli.command(short_help="Simulate a click action.")
+@cli.command(short_help="Click on object")
 @cl.argument("selector")
 def click(selector):
     """Click on an element specified by its selector."""

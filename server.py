@@ -14,8 +14,9 @@ from selenium.webdriver.support.ui import WebDriverWait
 app = Flask(__name__)
 
 # Global variable to store the browser instance
-BROWSER = None
+BROWSER: None|WebDriver = None
 OVERLAY_INFO = None
+MAX_OVERLAY_INFO_TEXT_LENGTH = int(os.environ.get("MAX_OVERLAY_INFO_TEXT_LENGTH", 50))
 
 
 def get_browser():
@@ -49,7 +50,7 @@ def close_website():
     return jsonify({"status": "error", "message": "No open windows"})
 
 
-def _activate_vimium_style_overlay(browser: WebDriver):
+def _activate_vimium_style_overlay(browser: WebDriver) -> None:
     script = Path("overlay.js").read_text()
     browser.execute_script(script)
     global OVERLAY_INFO
@@ -57,8 +58,27 @@ def _activate_vimium_style_overlay(browser: WebDriver):
     print(OVERLAY_INFO)
 
 
-def _deactivate_vimium_style_overlay(browser):
+def _deactivate_vimium_style_overlay(browser: WebDriver) -> None:
     browser.execute_script("overlays.removeShortcutOverlays();")
+
+def format_clickable_elements(overlays: list[dict[str, str]], max_text_length=MAX_OVERLAY_INFO_TEXT_LENGTH) -> str:
+    def clean_text(text: str) -> str:
+        # replace newlines with backslash variants etc.
+        # also puts quotes around the text
+        text = repr(text)
+        if len(text) > max_text_length:
+            return text[:max_text_length] + "..."
+        return text
+
+    out = ""
+    for overlay in overlays:
+        out += f"{overlay['label'].rjust(3)} - "
+        for key in ['type', 'class', 'text', 'ariaLabel']:
+            if isinstance(overlay[key], str) and overlay[key].strip():
+                value_fmted = clean_text(overlay[key])
+                out += f"{key}={value_fmted} "
+        out += "\n"
+    return out
 
 
 @app.route("/screenshot", methods=["GET"])
@@ -69,7 +89,9 @@ def take_screenshot():
     _activate_vimium_style_overlay(browser)
     screenshot = browser.get_screenshot_as_base64()
     _deactivate_vimium_style_overlay(browser)
-    return jsonify({"status": "success", "screenshot": screenshot})
+    global OVERLAY_INFO
+    assert OVERLAY_INFO is not None
+    return jsonify({"status": "success", "screenshot": screenshot, "overlay_info": format_clickable_elements(OVERLAY_INFO)})
 
 
 def _click_selector(selector: str):
