@@ -124,12 +124,13 @@ overlays.drawAllShortcutOverlays = function() {
         });
     });
 
-    const itemInfo = items.flatMap((item) => ({
+    const itemInfo = items.flatMap((item, index) => ({
             type: item.type,
             text: item.text,
             id: getId(item.element),
             ariaLabel: item.ariaLabel,
             class: item.element.className,
+            label: index.toString()
         })
     );
 

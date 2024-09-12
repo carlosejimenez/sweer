@@ -1,31 +1,29 @@
 #!/usr/bin/env python3
 
 from pathlib import Path
-import time
 from flask import Flask, request, jsonify
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.remote.webdriver import WebDriver
-import base64
 
 app = Flask(__name__)
 
 # Global variable to store the browser instance
-browser = None
+BROWSER = None
+OVERLAY_INFO = None
 
-VIMIUM_PATH_DEFAULT = Path("./vimium-master")
 
 def get_browser():
-    global browser
-    if browser is None:
+    global BROWSER
+    if BROWSER is None:
         options = webdriver.ChromeOptions()
         options.add_argument('--headless')
         options.add_argument('--no-sandbox')
         options.add_argument('--disable-dev-shm-usage')
-        browser = webdriver.Chrome(options=options)
-    return browser
+        BROWSER = webdriver.Chrome(options=options)
+    return BROWSER
 
 @app.route('/open', methods=['POST'])
 def open_website():
@@ -38,17 +36,20 @@ def open_website():
 
 @app.route('/close', methods=['POST'])
 def close_website():
-    global browser
-    if browser:
-        browser.quit()
-        browser = None
+    global BROWSER
+    if BROWSER:
+        BROWSER.quit()
+        BROWSER = None
         return jsonify({"status": "success", "message": "Closed browser"})
     return jsonify({"status": "error", "message": "No open windows"})
+
 
 def _activate_vimium_style_overlay(browser: WebDriver):
     script = Path("overlay.js").read_text()
     browser.execute_script(script)
-    print(browser.execute_script("return overlays.drawAllShortcutOverlays();"))
+    global OVERLAY_INFO
+    OVERLAY_INFO = browser.execute_script("return overlays.drawAllShortcutOverlays();")
+    print(OVERLAY_INFO)
 
 
 def _deactivate_vimium_style_overlay(browser):
@@ -65,9 +66,7 @@ def take_screenshot():
     _deactivate_vimium_style_overlay(browser)
     return jsonify({"status": "success", "screenshot": screenshot})
 
-@app.route('/click', methods=['POST'])
-def click_element():
-    selector = request.json['selector']
+def _click(selector: str):
     browser = get_browser()
     try:
         element = WebDriverWait(browser, 10).until(
@@ -77,6 +76,27 @@ def click_element():
         return jsonify({"status": "success", "message": f"Clicked element {selector}"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route('/click', methods=['POST'])
+def click_element():
+    selector = request.json['selector']
+    return _click(selector)
+
+
+@app.route('/click2', methods=['POST'])
+def click_element2():
+    if not OVERLAY_INFO:
+        return jsonify({"status": "error", "message": "Overlay info not found"})
+    label = request.json['selector']
+    print(f"Searching for overlay with label {label}")
+    for overlay in OVERLAY_INFO:
+        if label == overlay["label"]:
+            selector = f"#{overlay['id']}"
+            print(selector)
+            return _click(selector)
+    return jsonify({"status": "error", "message": f"Overlay with label {label} not found"})
+
 
 @app.route('/type', methods=['POST'])
 def type_text():
