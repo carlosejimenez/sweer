@@ -139,7 +139,7 @@ def execute_script(script):
 @cl.argument("action")
 def navigate(action):
     """Navigate using the specified action (e.g., 'back', 'forward')."""
-    response = send_request(action, "POST")
+    response = send_request("navigate", "POST", {"direction": action})
     print(response["message"])
     autoscreenshot()
 

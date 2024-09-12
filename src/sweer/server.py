@@ -232,8 +232,16 @@ def navigate():
     try:
         if direction == "back":
             browser.back()
+            if no_website_open(browser):
+                browser.forward()
+                return jsonify({"status": "error", "message": f"No more pages in history, still at {browser.current_url}."})
         elif direction == "forward":
+            previous_url = browser.current_url
             browser.forward()
+            if browser.current_url == previous_url:
+                return jsonify({"status": "error", "message": f"Already at the most recent page ({browser.current_url})."})
+        else:
+            return jsonify({"status": "error", "message": f"Invalid direction {direction}. Use 'back' or 'forward'."})
         return jsonify({"status": "success", "message": f"Navigated {direction}"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
