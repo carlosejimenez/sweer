@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 import requests
 import base64
 from pathlib import Path
@@ -6,10 +7,10 @@ from pathlib import Path
 # our click command
 import click as cl
 
-base_url = "http://localhost:8009"
+BASE_URL = os.environ.get("SWEER_BASEURL", "http://localhost:8009")
 
 def send_request(endpoint, method='GET', data=None):
-    url = f"{base_url}/{endpoint}"
+    url = f"{BASE_URL}/{endpoint}"
     if method == 'GET':
         response = requests.get(url)
     else:
@@ -36,7 +37,7 @@ def close():
 @cli.command(short_help="Take a screenshot.")
 def screenshot():
     """Capture a screenshot and save it as 'screenshot.png'."""
-    response = requests.get(f"{base_url}/screenshot")
+    response = requests.get(f"{BASE_URL}/screenshot")
     if response.status_code == 200:
         screenshot_data = response.json()['screenshot']
         path = Path('screenshot.png')

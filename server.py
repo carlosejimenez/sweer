@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import os
 from pathlib import Path
 from flask import Flask, request, jsonify
 from selenium import webdriver
@@ -200,5 +201,7 @@ def list_elements():
         return jsonify({"status": "error", "message": str(e)})
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8009)
+    base_url = os.environ.get("SWEER_BASEURL", "http://localhost:8009")
+    port = int(base_url.split(":")[-1])
+    app.run(host='0.0.0.0', port=port)
     
