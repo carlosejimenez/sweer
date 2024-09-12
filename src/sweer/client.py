@@ -2,9 +2,9 @@
 from __future__ import annotations
 
 import base64
-from enum import auto
 import os
 from pathlib import Path
+import sys
 
 # Need to rename the click package so it doesn't clash with
 # our click command
@@ -21,7 +21,14 @@ def send_request(endpoint, method="GET", data=None):
         response = requests.get(url)
     else:
         response = requests.post(url, json=data)
-    return response.json()
+    if response.status_code != 200:
+        print(f"Internal error communicating with backend: {response.text}")
+        sys.exit(2)
+    data = response.json()
+    if data["status"]  == "error":
+        print(f"Error: {data['message']}")
+        sys.exit(1)
+    return data
 
 
 @cl.group()
@@ -50,20 +57,18 @@ def autoscreenshot():
         _screenshot()
 
 def _screenshot(output: str="") -> None:
-    response = requests.get(f"{BASE_URL}/screenshot")
-    if response.status_code != 200:
-        return
-    data = response.json()
+    response = send_request("screenshot", "GET")
+    
     if not output:
-        output = f"screenshot_{data['screenshot_index']:03}.png"
-    screenshot_data = data["screenshot"]
+        output = f"screenshot_{response['screenshot_index']:03}.png"
+    screenshot_data = response["screenshot"]
     path = Path(output)
     path.write_bytes(base64.b64decode(screenshot_data))
     link_path = Path("latest_screenshot.png")
     link_path.unlink(missing_ok=True)
     link_path.symlink_to(path)
     print(f"Screenshot saved to {path}")
-    overlay_info = data["overlay_info"]
+    overlay_info = response["overlay_info"]
     if overlay_info:
         print("Here is an overview of all clickable elements:")
         print(overlay_info)

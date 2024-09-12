@@ -11,6 +11,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.common.exceptions import WebDriverException
 
 app = Flask(__name__)
 
@@ -39,7 +40,11 @@ def open_website():
     if "://" not in url:
         url = "https://" + url
     browser = get_browser()
-    browser.get(url)
+    try:
+        browser.get(url)
+    except WebDriverException as e:
+        if "net::ERR_NAME_NOT_RESOLVED" in str(e):
+            return jsonify({"status": "error", "message": f"Could not resolve {url}"})
     return jsonify({"status": "success", "message": f"Opened {url}"})
 
 
@@ -63,6 +68,7 @@ def _activate_vimium_style_overlay(browser: WebDriver) -> None:
 
 def _deactivate_vimium_style_overlay(browser: WebDriver) -> None:
     browser.execute_script("overlays.removeShortcutOverlays();")
+
 
 def format_clickable_elements(overlays: list[dict[str, str]], max_text_length=MAX_OVERLAY_INFO_TEXT_LENGTH) -> str:
     def clean_text(text: str) -> str:
