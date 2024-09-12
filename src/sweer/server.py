@@ -207,7 +207,7 @@ def get_text():
         return jsonify({"status": "error", "message": str(e)})
     try:
         text = element.text
-        return jsonify({"status": "success", "text": text})
+        return jsonify({"status": "success", "message": f"Text of element selected by {selector!r}: {text!r}"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
@@ -222,12 +222,12 @@ def get_attribute():
     try:
         element = WebDriverWait(browser, LOCATE_ELEMENT_TIMEOUT).until(EC.presence_of_element_located((By.CSS_SELECTOR, selector)))
     except TimeoutException:
-        return jsonify({"status": "error", "message": f"Element specified by the CSS selector {selector!r} not found"})
+        return jsonify({"status": "error", "message": f"Element specified by the CSS selector {selector!r} not found."})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
     try:
         value = element.get_attribute(attribute)
-        return jsonify({"status": "success", "value": value})
+        return jsonify({"status": "success", "message": f"Attribute {attribute} for the element specified by the CSS selector {selector!r}: {value!r}"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
