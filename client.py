@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-
 import requests
-import sys
 import base64
+from pathlib import Path
+# Need to rename the click package so it doesn't clash with 
+# our click command
+import click as cl
 
 base_url = "http://localhost:8009"
 
@@ -14,91 +16,88 @@ def send_request(endpoint, method='GET', data=None):
         response = requests.post(url, json=data)
     return response.json()
 
+@cl.group()
+def cli():
+    pass
+
+@cli.command()
+@cl.argument('url')
+def open(url):
+    response = send_request('open', 'POST', {'url': url})
+    print(response['message'])
+
+@cli.command()
+def close():
+    response = send_request('close', 'POST')
+    print(response['message'])
+
+@cli.command()
 def screenshot():
     response = requests.get(f"{base_url}/screenshot")
     if response.status_code == 200:
-        screenshot = response.json()['screenshot']
-        with open('screenshot.png', 'wb') as f:
-            f.write(base64.b64decode(screenshot))
-        return "Screenshot saved to screenshot.png"
+        screenshot_data = response.json()['screenshot']
+        path = Path('screenshot.png')
+        path.write_bytes(base64.b64decode(screenshot_data))
+        print("Screenshot saved to screenshot.png")
 
+@cli.command()
+@cl.argument('selector')
+def click(selector):
+    response = send_request('click', 'POST', {'selector': selector})
+    print(response['message'])
+
+@cli.command()
+@cl.argument('selector')
+@cl.argument('text')
+def type(selector, text):
+    response = send_request('type', 'POST', {'selector': selector, 'text': text})
+    print(response['message'])
+
+@cli.command()
+@cl.argument('direction')
+@cl.argument('amount', type=int)
+def scroll(direction, amount):
+    response = send_request('scroll', 'POST', {'direction': direction, 'amount': amount})
+    print(response['message'])
+
+@cli.command()
+@cl.argument('selector')
+def get_text(selector):
+    response = send_request('get_text', 'POST', {'selector': selector})
+    print(response['message'])
+
+@cli.command()
+@cl.argument('selector')
+@cl.argument('attribute')
+def get_attribute(selector, attribute):
+    response = send_request('get_attribute', 'POST', {'selector': selector, 'attribute': attribute})
+    print(response['message'])
+
+@cli.command()
+@cl.argument('script')
+def execute_script(script):
+    response = send_request('execute_script', 'POST', {'script': script})
+    print(response['message'])
+
+@cli.command()
+@cl.argument('action')
+def navigate(action):
+    response = send_request(action, 'POST')
+    print(response['message'])
+
+@cli.command()
+def reload():
+    response = send_request('reload', 'POST')
+    print(response['message'])
+
+@cli.command()
+@cl.argument('selector')
+def list_elements(selector):
+    response = send_request('list_elements', 'POST', {'selector': selector})
+    elements = response['elements']
+    print(f'Found {len(elements)} elements')
+    for element in elements:
+        print(element)
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python client.py <command> [args...]")
-        sys.exit(1)
-
-    command = sys.argv[1]
-    args = sys.argv[2:]
-    
-    # commands:
-    # open http://example.com
-    # click h1
-    # type input[type="text"] "Hello, World!"
-    # screenshot
-    # close
-    # scroll up 500
-    # scroll down 500
-    # scroll left 500
-    # scroll right 500
-    # get_text h1
-    # get_attribute a href
-    # execute_script "alert('Hello, World!')"
-    # navigate back
-    # navigate forward
-    # reload
-    # list_elements a
-    
-    if command == 'open':
-        url = args[0]
-        response = send_request('open', 'POST', {'url': url})
-        print(response['message'])
-    elif command == 'close':
-        response = send_request('close', 'POST')
-        print(response['message'])
-    elif command == 'screenshot':
-        print(screenshot())
-    elif command == 'click':
-        selector = args[0]
-        response = send_request('click', 'POST', {'selector': selector})
-        print(response['message'])
-    elif command == 'type':
-        selector = args[0]
-        text = args[1]
-        response = send_request('type', 'POST', {'selector': selector, 'text': text})
-        print(response['message'])
-    elif command == 'scroll':
-        direction = args[0]
-        amount = args[1]
-        response = send_request('scroll', 'POST', {'direction': direction, 'amount': amount})
-        print(response['message'])
-    elif command == 'get_text':
-        selector = args[0]
-        response = send_request('get_text', 'POST', {'selector': selector})
-        print(response['message'])
-    elif command == 'get_attribute':
-        selector = args[0]
-        attribute = args[1]
-        response = send_request('get_attribute', 'POST', {'selector': selector, 'attribute': attribute})
-        print(response['message'])
-    elif command == 'execute_script':
-        script = args[0]
-        response = send_request('execute_script', 'POST', {'script': script})
-        print(response['message'])
-    elif command == 'navigate':
-        action = args[0]
-        response = send_request(action, 'POST')
-        print(response['message'])
-    elif command == 'reload':
-        response = send_request('reload', 'POST')
-        print(response['message'])
-    elif command == 'list_elements':
-        selector = args[0]
-        response = send_request('list_elements', 'POST', {'selector': selector})
-        elements = response['elements']
-        print(f'Found {len(elements)} elements')
-        for element in elements:
-            print(element)
-    else:
-        print("Invalid command")
-        sys.exit(1)
+    cli()
