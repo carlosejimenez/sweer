@@ -100,10 +100,10 @@ def type(selector, text):
 
 
 @cli.command(short_help="Scroll the page.")
-@cl.argument("direction")
+@cl.argument("direction", type=cl.Choice(["up", "down", "left", "right"]))
 @cl.argument("amount", type=int)
 def scroll(direction, amount):
-    """Scroll the page in the specified direction (up or down) by the given amount."""
+    """Scroll the page in the specified direction (up or down) by the given amount (px)."""
     response = send_request("scroll", "POST", {"direction": direction, "amount": amount})
     print(response["message"])
     autoscreenshot()
@@ -136,10 +136,10 @@ def execute_script(script):
 
 
 @cli.command(short_help="Navigate through the browser history.")
-@cl.argument("action")
-def navigate(action):
+@cl.argument("direction", type=cl.Choice(["back", "forward"]))
+def navigate(direction):
     """Navigate using the specified action (e.g., 'back', 'forward')."""
-    response = send_request("navigate", "POST", {"direction": action})
+    response = send_request("navigate", "POST", {"direction": direction})
     print(response["message"])
     autoscreenshot()
 
