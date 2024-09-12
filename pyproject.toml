@@ -45,6 +45,10 @@ dev = [
     "pre-commit",
 ]
 
+[project.scripts]
+sweer-backend = "sweer.server:main"
+sweer = "sweer.client:main"
+
 [tool.setuptools]
 include-package-data = true
 

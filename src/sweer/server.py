@@ -235,8 +235,11 @@ def list_elements():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-
-if __name__ == "__main__":
+def main():
     base_url = os.environ.get("SWEER_BASEURL", "http://localhost:8009")
     port = int(base_url.split(":")[-1])
     app.run(host="0.0.0.0", port=port)
+
+
+if __name__ == "__main__":
+    main()
