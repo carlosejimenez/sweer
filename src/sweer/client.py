@@ -70,7 +70,7 @@ def _screenshot(output: str="") -> None:
     print(f"Screenshot saved to {path}")
     overlay_info = response["overlay_info"]
     if overlay_info:
-        print("Here is an overview of all clickable elements:")
+        print("\nHere is an overview of all clickable elements:")
         print(overlay_info)
 
 

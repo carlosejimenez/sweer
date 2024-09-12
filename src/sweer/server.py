@@ -34,6 +34,10 @@ def get_browser():
     return BROWSER
 
 
+def no_website_open(browser: WebDriver):
+    return browser.current_url == "data:,"
+
+
 @app.route("/open", methods=["POST"])
 def open_website():
     url = request.json["url"]
@@ -49,7 +53,7 @@ def open_website():
 
 
 @app.route("/close", methods=["POST"])
-def close_website():
+def close_browser():
     global BROWSER
     if BROWSER:
         BROWSER.quit()
@@ -63,7 +67,6 @@ def _activate_vimium_style_overlay(browser: WebDriver) -> None:
     browser.execute_script(script)
     global OVERLAY_INFO
     OVERLAY_INFO = browser.execute_script("return overlays.drawAllShortcutOverlays();")
-    print(OVERLAY_INFO)
 
 
 def _deactivate_vimium_style_overlay(browser: WebDriver) -> None:
@@ -95,6 +98,8 @@ def format_clickable_elements(overlays: list[dict[str, str]], max_text_length=MA
 @app.route("/screenshot", methods=["GET"])
 def take_screenshot():
     browser = get_browser()
+    if no_website_open(browser):
+        return jsonify({"status": "error", "message": "Please open a website first before taking a screenshot."})
     if not browser:
         return jsonify({"status": "error", "message": "No open windows"})
     _activate_vimium_style_overlay(browser)
@@ -132,6 +137,8 @@ def _click_overlay(label: str):
 
 @app.route("/click", methods=["POST"])
 def click_element():
+    if no_website_open(get_browser()):
+        return jsonify({"status": "error", "message": "Please open a website first before trying to click an element."})
     selector = request.json["selector"]
     if len(selector) >= 3 or not selector.isnumeric():
         return _click_selector(selector)
@@ -140,9 +147,11 @@ def click_element():
 
 @app.route("/type", methods=["POST"])
 def type_text():
+    browser = get_browser()
+    if no_website_open(browser):
+        return jsonify({"status": "error", "message": "Please open a website first before trying to type text."})
     selector = request.json["selector"]
     text = request.json["text"]
-    browser = get_browser()
     try:
         element = WebDriverWait(browser, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, selector)))
         element.send_keys(text)
@@ -153,9 +162,11 @@ def type_text():
 
 @app.route("/scroll", methods=["POST"])
 def scroll_page():
+    browser = get_browser()
+    if no_website_open(browser):
+        return jsonify({"status": "error", "message": "Please open a website first before trying to scroll."})
     direction = request.json["direction"]
     amount = request.json["amount"]
-    browser = get_browser()
     try:
         if direction == "up":
             browser.execute_script(f"window.scrollBy(0, -{amount});")
@@ -172,6 +183,8 @@ def scroll_page():
 
 @app.route("/get_text", methods=["POST"])
 def get_text():
+    if no_website_open(get_browser()):
+        return jsonify({"status": "error", "message": "Please open a website first before trying to get text."})
     selector = request.json["selector"]
     browser = get_browser()
     try:
@@ -184,6 +197,8 @@ def get_text():
 
 @app.route("/get_attribute", methods=["POST"])
 def get_attribute():
+    if no_website_open(get_browser()):
+        return jsonify({"status": "error", "message": "Please open a website first before trying to get an attribute."})
     selector = request.json["selector"]
     attribute = request.json["attribute"]
     browser = get_browser()
@@ -197,8 +212,10 @@ def get_attribute():
 
 @app.route("/execute_script", methods=["POST"])
 def execute_script():
-    script = request.json["script"]
     browser = get_browser()
+    if no_website_open(browser):
+        return jsonify({"status": "error", "message": "Please open a website first before trying to execute a script."})
+    script = request.json["script"]
     try:
         browser.execute_script(script)
         return jsonify({"status": "success", "message": "Script executed successfully"})
@@ -208,8 +225,10 @@ def execute_script():
 
 @app.route("/navigate", methods=["POST"])
 def navigate():
-    direction = request.json["direction"]
     browser = get_browser()
+    if no_website_open(browser):
+        return jsonify({"status": "error", "message": "Please open a website first before trying to navigate."})
+    direction = request.json["direction"]
     try:
         if direction == "back":
             browser.back()
@@ -222,6 +241,8 @@ def navigate():
 
 @app.route("/reload", methods=["POST"])
 def reload_page():
+    if no_website_open(get_browser()):
+        return jsonify({"status": "error", "message": "Please open a website first before trying to reload."})
     browser = get_browser()
     try:
         browser.refresh()
@@ -232,6 +253,8 @@ def reload_page():
 
 @app.route("/list_elements", methods=["POST"])
 def list_elements():
+    if no_website_open(get_browser()):
+        return jsonify({"status": "error", "message": "Please open a website first before trying to list elements."})
     selector = request.json["selector"]
     browser = get_browser()
     try:
