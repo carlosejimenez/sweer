@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import functools
 import os
 from pathlib import Path
-
 from flask import Flask, jsonify, request
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -37,6 +37,17 @@ def get_browser():
 
 def no_website_open(browser: WebDriver):
     return browser.current_url == "data:,"
+
+
+def require_website_open(func):
+    """Decorator to ensure that a website is open before executing a function."""
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        if no_website_open(get_browser()):
+            return jsonify({"status": "error", "message": "Please open a website first."})
+        print("open alright")
+        return func(*args, **kwargs)
+    return wrapper
 
 
 @app.route("/open", methods=["POST"])
@@ -97,12 +108,9 @@ def format_clickable_elements(overlays: list[dict[str, str]], max_text_length=MA
 
 
 @app.route("/screenshot", methods=["GET"])
+@require_website_open
 def take_screenshot():
     browser = get_browser()
-    if no_website_open(browser):
-        return jsonify({"status": "error", "message": "Please open a website first before taking a screenshot."})
-    if not browser:
-        return jsonify({"status": "error", "message": "No open windows"})
     _activate_vimium_style_overlay(browser)
     screenshot = browser.get_screenshot_as_base64()
     _deactivate_vimium_style_overlay(browser)
@@ -148,9 +156,8 @@ def _click_overlay(label: str):
 
 
 @app.route("/click", methods=["POST"])
+@require_website_open
 def click_element():
-    if no_website_open(get_browser()):
-        return jsonify({"status": "error", "message": "Please open a website first before trying to click an element."})
     selector = request.json["selector"]
     if len(selector) >= 4 or not selector.isnumeric():
         return _click_selector(selector)
@@ -158,10 +165,9 @@ def click_element():
 
 
 @app.route("/type", methods=["POST"])
+@require_website_open
 def type_text():
     browser = get_browser()
-    if no_website_open(browser):
-        return jsonify({"status": "error", "message": "Please open a website first before trying to type text."})
     selector = request.json["selector"]
     text = request.json["text"]
     try:
@@ -173,10 +179,9 @@ def type_text():
 
 
 @app.route("/scroll", methods=["POST"])
+@require_website_open
 def scroll_page():
     browser = get_browser()
-    if no_website_open(browser):
-        return jsonify({"status": "error", "message": "Please open a website first before trying to scroll."})
     direction = request.json["direction"]
     amount = request.json["amount"]
     try:
@@ -194,9 +199,8 @@ def scroll_page():
 
 
 @app.route("/get_text", methods=["POST"])
+@require_website_open
 def get_text():
-    if no_website_open(get_browser()):
-        return jsonify({"status": "error", "message": "Please open a website first before trying to get text."})
     selector = request.json["selector"]
     browser = get_browser()
     try:
@@ -213,9 +217,8 @@ def get_text():
 
 
 @app.route("/get_attribute", methods=["POST"])
+@require_website_open
 def get_attribute():
-    if no_website_open(get_browser()):
-        return jsonify({"status": "error", "message": "Please open a website first before trying to get an attribute."})
     selector = request.json["selector"]
     attribute = request.json["attribute"]
     browser = get_browser()
@@ -246,10 +249,9 @@ def execute_script():
 
 
 @app.route("/navigate", methods=["POST"])
+@require_website_open
 def navigate():
     browser = get_browser()
-    if no_website_open(browser):
-        return jsonify({"status": "error", "message": "Please open a website first before trying to navigate."})
     direction = request.json["direction"]
     try:
         if direction == "back":
@@ -270,9 +272,8 @@ def navigate():
 
 
 @app.route("/reload", methods=["POST"])
+@require_website_open
 def reload_page():
-    if no_website_open(get_browser()):
-        return jsonify({"status": "error", "message": "Please open a website first before trying to reload."})
     browser = get_browser()
     try:
         browser.refresh()
@@ -282,9 +283,8 @@ def reload_page():
 
 
 @app.route("/list_elements", methods=["POST"])
+@require_website_open
 def list_elements():
-    if no_website_open(get_browser()):
-        return jsonify({"status": "error", "message": "Please open a website first before trying to list elements."})
     selector = request.json["selector"]
     browser = get_browser()
     try:
