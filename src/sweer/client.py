@@ -56,29 +56,73 @@ def autoscreenshot():
     if AUTOSCREENSHOT:
         _screenshot()
 
-def _screenshot(output: str="") -> None:
+def _screenshot(output: str="", with_overlay: bool=False) -> None:
     response = send_request("screenshot", "GET")
     
     if not output:
         output = f"screenshot_{response['screenshot_index']:03}.png"
+    
     screenshot_data = response["screenshot"]
+    screenshot_data_with_overlay = response["screenshot_with_overlay"]
     path = Path(output)
     path.write_bytes(base64.b64decode(screenshot_data))
+    path_with_overlay = Path(output.removesuffix(".png") + "_with_overlay.png")
+    if with_overlay:
+        path_with_overlay.write_bytes(base64.b64decode(screenshot_data_with_overlay))
     link_path = Path("latest_screenshot.png")
+    link_path_with_overlay = Path("latest_screenshot_with_overlay.png")
     link_path.unlink(missing_ok=True)
     link_path.symlink_to(path)
+    link_path_with_overlay.unlink(missing_ok=True)
     print(f"Screenshot saved to {path}")
-    overlay_info = response["overlay_info"]
-    if overlay_info:
-        print("\nHere is an overview of all clickable elements:")
-        print(overlay_info)
+    if with_overlay:
+        link_path_with_overlay.symlink_to(path_with_overlay)
+        print(f"Screenshot with overlay saved to {path_with_overlay}")
+        overlay_info = response["overlay_info"]
+        if overlay_info:
+            print("\nHere is an overview of all clickable elements:")
+            print(overlay_info)
+        
+def _save_screenshot(with_overlay: bool=False) -> None:
+    response = send_request("screenshot", "GET")
+    _cleanup_screenshots()
+    screenshot_data = response["screenshot"]
+    screenshot_data_with_overlay = response["screenshot_with_overlay"]
+    link_path = Path("latest_screenshot.png")
+    link_path.write_bytes(base64.b64decode(screenshot_data))
+    if with_overlay:
+        link_path_with_overlay = Path("latest_screenshot_with_overlay.png")
+        link_path_with_overlay.write_bytes(base64.b64decode(screenshot_data_with_overlay))
+        overlay_info = response["overlay_info"]
+        overlay_path = Path("latest_screenshot_overlay.json")
+        overlay_path.write_text(overlay_info)
+
+
+def _cleanup_screenshots() -> None:
+    link_path = Path("latest_screenshot.png")
+    link_path_with_overlay = Path("latest_screenshot_with_overlay.png")
+    overlay_path = Path("latest_screenshot_overlay.json")
+    link_path.unlink(missing_ok=True)
+    link_path_with_overlay.unlink(missing_ok=True)
+    overlay_path.unlink(missing_ok=True)
 
 
 @cli.command(short_help="Take a screenshot.")
 @cl.option("--output", "-o", default=None, help="Output path for the screenshot.")
-def screenshot(output):
+@cl.option("--with-overlay", "-w", is_flag=True, help="Capture a screenshot with overlay details.")
+def screenshot(output, with_overlay):
     """Capture a screenshot and save it to the specified output path."""
-    _screenshot(output)
+    _screenshot(output, with_overlay)
+    
+@cli.command(short_help="Save a screenshot.")
+@cl.option("--with-overlay", "-w", is_flag=True, help="Capture a screenshot with overlay details.")
+def save_screenshot(with_overlay: bool=False) -> None:
+    _save_screenshot(with_overlay)
+    
+
+@cli.command(short_help="Save a screenshot.")
+def cleanup_screenshots() -> None:
+    _cleanup_screenshots()
 
 @cli.command(short_help="Click on object")
 @cl.argument("selector")
@@ -133,6 +177,13 @@ def execute_script(script):
     response = send_request("execute_script", "POST", {"script": script})
     print(response["message"])
     autoscreenshot()
+
+
+@cli.command(short_help="Get information about the current page.")
+def info():
+    """Get information about the current page."""
+    response = send_request("info", "GET")
+    print(response["message"])
 
 
 @cli.command(short_help="Navigate through the browser history.")

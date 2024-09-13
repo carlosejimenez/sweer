@@ -59,6 +59,12 @@ def catch_error(func):
             return jsonify({"status": "error", "message": str(e)})
     return wrapper
 
+@app.route("/info", methods=["GET"])
+def info():
+    browser = get_browser()
+    if no_website_open(browser):
+        return jsonify({"status": "success", "message": "No website open"})
+    return jsonify({"status": "success", "message": f"Current URL: {browser.current_url}"})
 
 @app.route("/open", methods=["POST"])
 @catch_error
@@ -122,14 +128,23 @@ def format_clickable_elements(overlays: list[dict[str, str]], max_text_length=MA
 @require_website_open
 def take_screenshot():
     browser = get_browser()
-    _activate_vimium_style_overlay(browser)
     screenshot = browser.get_screenshot_as_base64()
+    _activate_vimium_style_overlay(browser)
+    screenshot_with_overlay = browser.get_screenshot_as_base64()
     _deactivate_vimium_style_overlay(browser)
     global OVERLAY_INFO
     assert OVERLAY_INFO is not None
     global SCREENSHOT_INDEX
     SCREENSHOT_INDEX += 1
-    return jsonify({"status": "success", "screenshot": screenshot, "overlay_info": format_clickable_elements(OVERLAY_INFO), "screenshot_index": SCREENSHOT_INDEX})
+    return jsonify(
+        {
+            "status": "success",
+            "screenshot": screenshot,
+            "screenshot_with_overlay": screenshot_with_overlay,
+            "overlay_info": format_clickable_elements(OVERLAY_INFO),
+            "screenshot_index": SCREENSHOT_INDEX,
+        }
+    )
 
 
 def _click_selector(selector: str, *, confirmation_text=""):
