@@ -4,20 +4,21 @@ from __future__ import annotations
 
 import functools
 import os
-from pathlib import Path
 import time
+from pathlib import Path
+
 from flask import Flask, jsonify, request
 from selenium import webdriver
+from selenium.common.exceptions import TimeoutException, WebDriverException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.common.exceptions import WebDriverException, TimeoutException
 
 app = Flask(__name__)
 
 # Global variable to store the browser instance
-BROWSER: None|WebDriver = None
+BROWSER: None | WebDriver = None
 OVERLAY_INFO = None
 MAX_OVERLAY_INFO_TEXT_LENGTH = int(os.environ.get("SWEER_MAX_OVERLAY_INFO_TEXT_LENGTH", 50))
 LOCATE_ELEMENT_TIMEOUT = int(os.environ.get("SWEER_LOCATE_ELEMENT_TIMEOUT", 1))
@@ -42,23 +43,28 @@ def no_website_open(browser: WebDriver):
 
 def require_website_open(func):
     """Decorator to ensure that a website is open before executing a function."""
+
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         if no_website_open(get_browser()):
             return jsonify({"status": "error", "message": "Please open a website first."})
         return func(*args, **kwargs)
+
     return wrapper
 
 
 def catch_error(func):
     """Decorator to catch exceptions and return them as JSON."""
+
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
         except Exception as e:
             return jsonify({"status": "error", "message": str(e)})
+
     return wrapper
+
 
 @app.route("/info", methods=["GET"])
 def info():
@@ -66,6 +72,7 @@ def info():
     if no_website_open(browser):
         return jsonify({"status": "success", "message": "No website open"})
     return jsonify({"status": "success", "message": f"Current URL: {browser.current_url}"})
+
 
 @app.route("/open", methods=["POST"])
 @catch_error
@@ -119,7 +126,7 @@ def format_clickable_elements(overlays: list[dict[str, str]], max_text_length=MA
         out += f"{overlay['label'].rjust(3)} - "
         if not overlay["id"].startswith("RANDOM_ID"):
             out += f"ID={overlay['id']!r} "
-        for key in ['type', 'class', 'text', 'ariaLabel']:
+        for key in ["type", "class", "text", "ariaLabel"]:
             if isinstance(overlay[key], str) and overlay[key].strip():
                 value_fmted = clean_text(overlay[key])
                 out += f"{key}={value_fmted} "
@@ -153,7 +160,9 @@ def take_screenshot():
 def _click_selector(selector: str, *, confirmation_text=""):
     browser = get_browser()
     try:
-        element = WebDriverWait(browser, LOCATE_ELEMENT_TIMEOUT).until(EC.element_to_be_clickable((By.CSS_SELECTOR, selector)))
+        element = WebDriverWait(browser, LOCATE_ELEMENT_TIMEOUT).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
+        )
     except TimeoutException:
         message = f"Element specified by the CSS selector {selector!r} not found or not clickable"
         return jsonify({"status": "error", "message": message})
@@ -171,9 +180,9 @@ def _click_overlay(label: str):
             selector = f"#{overlay['id']}"
             return _click_selector(selector, confirmation_text=f"Clicked on element with label {label}")
     message = (
-        f"Overlay with label {label} not found. Here are the elements that can be clicked:\n\n" +
-        format_clickable_elements(OVERLAY_INFO) + 
-        "\nThe first column is the label."
+        f"Overlay with label {label} not found. Here are the elements that can be clicked:\n\n"
+        + format_clickable_elements(OVERLAY_INFO)
+        + "\nThe first column is the label."
     )
     return jsonify({"status": "error", "message": message})
 
@@ -225,7 +234,9 @@ def get_text():
     selector = request.json["selector"]
     browser = get_browser()
     try:
-        element = WebDriverWait(browser, LOCATE_ELEMENT_TIMEOUT).until(EC.presence_of_element_located((By.CSS_SELECTOR, selector)))
+        element = WebDriverWait(browser, LOCATE_ELEMENT_TIMEOUT).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, selector))
+        )
     except TimeoutException:
         return jsonify({"status": "error", "message": f"Element specified by the CSS selector {selector!r} not found"})
     text = element.text
@@ -240,11 +251,18 @@ def get_attribute():
     attribute = request.json["attribute"]
     browser = get_browser()
     try:
-        element = WebDriverWait(browser, LOCATE_ELEMENT_TIMEOUT).until(EC.presence_of_element_located((By.CSS_SELECTOR, selector)))
+        element = WebDriverWait(browser, LOCATE_ELEMENT_TIMEOUT).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, selector))
+        )
     except TimeoutException:
         return jsonify({"status": "error", "message": f"Element specified by the CSS selector {selector!r} not found."})
     value = element.get_attribute(attribute)
-    return jsonify({"status": "success", "message": f"Attribute {attribute} for the element specified by the CSS selector {selector!r}: {value!r}"})
+    return jsonify(
+        {
+            "status": "success",
+            "message": f"Attribute {attribute} for the element specified by the CSS selector {selector!r}: {value!r}",
+        }
+    )
 
 
 @app.route("/execute_script", methods=["POST"])

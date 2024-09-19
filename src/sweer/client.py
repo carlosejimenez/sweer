@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import base64
 import os
-from pathlib import Path
 import sys
+from pathlib import Path
 
 # Need to rename the click package so it doesn't clash with
 # our click command
@@ -25,7 +25,7 @@ def send_request(endpoint, method="GET", data=None):
         print(f"Internal error communicating with backend: {response.text}")
         sys.exit(2)
     data = response.json()
-    if data["status"]  == "error":
+    if data["status"] == "error":
         print(f"Error: {data['message']}")
         sys.exit(1)
     return data
@@ -58,12 +58,13 @@ def autoscreenshot():
     if AUTOSCREENSHOT:
         _screenshot()
 
-def _screenshot(output: str="", with_overlay: bool=False) -> None:
+
+def _screenshot(output: str = "", with_overlay: bool = False) -> None:
     response = send_request("screenshot", "GET")
-    
+
     if not output:
         output = f"screenshot_{response['screenshot_index']:03}.png"
-    
+
     screenshot_data = response["screenshot"]
     screenshot_data_with_overlay = response["screenshot_with_overlay"]
     path = Path(output)
@@ -84,8 +85,9 @@ def _screenshot(output: str="", with_overlay: bool=False) -> None:
         if overlay_info:
             print("\nHere is an overview of all clickable elements:")
             print(overlay_info)
-        
-def _save_screenshot(with_overlay: bool=False) -> None:
+
+
+def _save_screenshot(with_overlay: bool = False) -> None:
     response = send_request("screenshot", "GET")
     _cleanup_screenshots()
     screenshot_data = response["screenshot"]
@@ -115,16 +117,18 @@ def _cleanup_screenshots() -> None:
 def screenshot(output, with_overlay):
     """Capture a screenshot and save it to the specified output path."""
     _screenshot(output, with_overlay)
-    
+
+
 @cli.command(short_help="Save a screenshot.")
 @cl.option("--with-overlay", "-w", is_flag=True, help="Capture a screenshot with overlay details.")
-def save_screenshot(with_overlay: bool=False) -> None:
+def save_screenshot(with_overlay: bool = False) -> None:
     _save_screenshot(with_overlay)
-    
+
 
 @cli.command(short_help="Save a screenshot.")
 def cleanup_screenshots() -> None:
     _cleanup_screenshots()
+
 
 @cli.command(short_help="Click on object")
 @cl.argument("selector")

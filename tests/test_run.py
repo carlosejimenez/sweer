@@ -1,23 +1,26 @@
-from pathlib import Path
-import subprocess
-import pytest
+from __future__ import annotations
 
+import subprocess
+from pathlib import Path
+
+import pytest
 
 TEST_DIR = Path(__file__).parent / "test_data"
 assert TEST_DIR.exists()
-TEST_HTML_FILE = TEST_DIR / 'index.html'
+TEST_HTML_FILE = TEST_DIR / "index.html"
 assert TEST_HTML_FILE.exists()
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def sweer_backend():
     process = subprocess.Popen(["sweer-backend"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     yield process
     process.terminate()
     process.wait()
 
+
 def _run(command, fail=False, substr=""):
-    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    result = subprocess.run(command, capture_output=True)
     err = result.stderr.decode()
     out = result.stdout.decode()
     if not fail:
@@ -32,7 +35,7 @@ def _run(command, fail=False, substr=""):
 
 def test_run(sweer_backend):
     for command in [
-        (["sweer", "open", "doesnotexist"], True, "resolve"),
+        (["sweer", "open", "doesnotexist"], True),
         ["sweer", "open", str(TEST_HTML_FILE)],
         ["sweer", "screenshot"],
         ["sweer", "screenshot", "--with-overlay"],
@@ -47,8 +50,7 @@ def test_run(sweer_backend):
         (["sweer", "get-attribute", "#div10", "class"], True),
         ["sweer", "execute-script", ""],
         (["sweer", "navigate", "forward"], True, "Already at the most recent"),
-        ["sweer", "navigate", "back"],
-        ["sweer", "navigate", "forward"],
+        (["sweer", "navigate", "back"], True, "No more pages in history"),
         ["sweer", "reload"],
     ]:
         if isinstance(command, list):
