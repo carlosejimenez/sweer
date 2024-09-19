@@ -40,6 +40,8 @@ def cli():
 @cl.argument("url")
 def open(url):
     """Open the specified website URL."""
+    if Path(url).is_file():
+        url = f"file://{Path(url).resolve()}"
     response = send_request("open", "POST", {"url": url})
     print(response["message"])
     autoscreenshot()

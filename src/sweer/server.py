@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 import os
 from pathlib import Path
+import time
 from flask import Flask, jsonify, request
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -73,6 +74,8 @@ def open_website():
     if "://" not in url:
         url = "https://" + url
     browser = get_browser()
+    time.sleep(0.3)
+    print(f"Opening {url}")
     try:
         browser.get(url)
     except WebDriverException as e:
