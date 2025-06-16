@@ -33,7 +33,7 @@ classifiers = [
 
 dependencies = [
     "flask",
-    "selenium",
+    "playwright",
     "requests",
     "click",
 ]
