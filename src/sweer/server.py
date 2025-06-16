@@ -1,448 +1,394 @@
 #!/usr/bin/env python3
-
+"""Sweer server ‒ Flask + Playwright backend.
+"""
 from __future__ import annotations
 
+import base64
+import functools
 import os
 import threading
 import time
-from typing import Any
+from typing import Any, List
 
 from flask import Flask, jsonify, request, Response
-from selenium import webdriver
-from selenium.common.exceptions import TimeoutException, WebDriverException
-from selenium.webdriver.common.action_chains import ActionChains
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.remote.webdriver import WebDriver
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
+from playwright.sync_api import Browser, Page, Playwright, sync_playwright
 
-from .utils import (
-    no_website_open,
-    require_website_open,
-    catch_error,
-    KEY_MAP,
-    validate_request,
-)
+from .utils import catch_error, validate_request
+
 
 app = Flask(__name__)
 
-# Configuration constants
-LOCATE_ELEMENT_TIMEOUT = int(os.environ.get("SWEER_LOCATE_ELEMENT_TIMEOUT", 1))
+
 WINDOW_WIDTH = int(os.environ.get("SWEER_WINDOW_WIDTH", 1024))
 WINDOW_HEIGHT = int(os.environ.get("SWEER_WINDOW_HEIGHT", 768))
-
-# Global variable to store the browser instance
-BROWSER: None | WebDriver = None
-SCREENSHOT_INDEX = 0
-SCREENSHOT_LOCK = threading.Lock()
+HEADLESS = os.environ.get("SWEER_HEADLESS", "1") != "0"
+SCREENSHOT_DELAY = float(os.environ.get("SWEER_SCREENSHOT_DELAY", 0.2))
+CROSSHAIR_ID = "__sweer_crosshair__"
 
 
-def get_browser():
-    global BROWSER
-    if BROWSER is None:
-        options = webdriver.ChromeOptions()
-        options.add_argument("--headless")
-        options.add_argument("--no-sandbox")
-        options.add_argument("--disable-dev-shm-usage")
-        BROWSER = webdriver.Chrome(options=options)
-        BROWSER.set_window_size(WINDOW_WIDTH, WINDOW_HEIGHT)
-    return BROWSER
+_playwright: Playwright | None = None
+_browser: Browser | None = None
+_page: Page | None = None
+_screenshot_index = 0
+_mouse_x = 0
+_mouse_y = 0
+_lock = threading.RLock()
 
 
-def get_screenshot() -> dict[str, Any]:
-    browser = get_browser()
-    screenshot = browser.get_screenshot_as_base64()
-    global SCREENSHOT_INDEX
-    with SCREENSHOT_LOCK:
-        SCREENSHOT_INDEX += 1
-        screenshot_index = SCREENSHOT_INDEX
+def _ensure_browser() -> Page:
+    """Launch Chromium lazily and move cursor to (0,0) once."""
+    global _playwright, _browser, _page, _mouse_x, _mouse_y
+    if _page is not None:
+        return _page
+    _playwright = sync_playwright().start()
+    _browser = _playwright.chromium.launch(headless=HEADLESS)
+    ctx = _browser.new_context(viewport={"width": WINDOW_WIDTH, "height": WINDOW_HEIGHT})
+    _page = ctx.new_page()
+    _page.mouse.move(0, 0)
+    _mouse_x = _mouse_y = 0
+    return _page
+
+
+def _no_website_open() -> bool:
+    return _page is None or _page.url in (None, "about:blank", "")
+
+
+def _inject_crosshair(page: Page, x: int, y: int) -> bool:
+    """Inject crosshair at given coordinates. Returns True if successful, False otherwise."""
+    js = (
+        "([x, y, id]) => {\n"
+        "  const size = 20;\n"
+        "  const thickness = 2;\n"
+        "  const hId = id + '_h';\n"
+        "  const vId = id + '_v';\n"
+        "  \n"
+        "  let hLine = document.getElementById(hId);\n"
+        "  if (!hLine) {\n"
+        "    hLine = document.createElement('div');\n"
+        "    hLine.id = hId;\n"
+        "    hLine.style.position = 'fixed';\n"
+        "    hLine.style.pointerEvents = 'none';\n"
+        "    hLine.style.zIndex = '2147483647';\n"
+        "    hLine.style.backgroundColor = 'red';\n"
+        "    document.body.appendChild(hLine);\n"
+        "  }\n"
+        "  \n"
+        "  let vLine = document.getElementById(vId);\n"
+        "  if (!vLine) {\n"
+        "    vLine = document.createElement('div');\n"
+        "    vLine.id = vId;\n"
+        "    vLine.style.position = 'fixed';\n"
+        "    vLine.style.pointerEvents = 'none';\n"
+        "    vLine.style.zIndex = '2147483647';\n"
+        "    vLine.style.backgroundColor = 'red';\n"
+        "    document.body.appendChild(vLine);\n"
+        "  }\n"
+        "  \n"
+        "  hLine.style.width = `${size}px`;\n"
+        "  hLine.style.height = `${thickness}px`;\n"
+        "  hLine.style.left = `${x - size / 2}px`;\n"
+        "  hLine.style.top = `${y - thickness / 2}px`;\n"
+        "  \n"
+        "  vLine.style.width = `${thickness}px`;\n"
+        "  vLine.style.height = `${size}px`;\n"
+        "  vLine.style.left = `${x - thickness / 2}px`;\n"
+        "  vLine.style.top = `${y - size / 2}px`;\n"
+        "}"
+    )
+    try:
+        page.evaluate(js, [x, y, CROSSHAIR_ID])
+        return True
+    except Exception:
+        # execution context might be destroyed due to navigation
+        return False
+
+
+def _remove_crosshair(page: Page) -> None:
+    js = (
+        "(id) => {\n"
+        "  const hEl = document.getElementById(id + '_h');\n"
+        "  const vEl = document.getElementById(id + '_v');\n"
+        "  if (hEl) hEl.remove();\n"
+        "  if (vEl) vEl.remove();\n"
+        "}"
+    )
+    try:
+        page.evaluate(js, CROSSHAIR_ID)
+    except Exception:
+        # execution context might be destroyed due to navigation, skip crosshair removal
+        pass
+
+
+def _get_screenshot() -> dict[str, Any]:
+    """Capture screenshot with crosshair (callers hold _lock)."""
+    global _screenshot_index
+    pg = _ensure_browser()
+    # try to inject crosshair, with retry for navigation scenarios
+    crosshair_injected = _inject_crosshair(pg, _mouse_x, _mouse_y)
+    if not crosshair_injected:
+        # page might be navigating, wait a bit and retry
+        time.sleep(SCREENSHOT_DELAY)
+        crosshair_injected = _inject_crosshair(pg, _mouse_x, _mouse_y)
+        if not crosshair_injected:
+            # try once more
+            time.sleep(SCREENSHOT_DELAY)
+            _inject_crosshair(pg, _mouse_x, _mouse_y)
+    time.sleep(SCREENSHOT_DELAY)
+    buf = pg.screenshot(type="png")
+    _remove_crosshair(pg)
+    _screenshot_index += 1
     return {
-        "screenshot": screenshot,
-        "screenshot_index": screenshot_index,
+        "screenshot": base64.b64encode(buf).decode(),
+        "screenshot_index": _screenshot_index,
     }
 
 
-def create_response(
-    response_data: dict[str, Any], return_screenshot: bool,
-) -> Response:
+def _create_response(data: dict[str, Any], return_screenshot: bool) -> Response:
     if return_screenshot:
-        screenshot_data = get_screenshot()
-        response_data.update(screenshot_data)
-    return jsonify(response_data)
+        data.update(_get_screenshot())
+    return jsonify(data)
+
+
+def require_website_open(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):  # type: ignore[override]
+        with _lock:
+            if _no_website_open():
+                return jsonify({"status": "error", "message": "Please open a website first."})
+        return func(*args, **kwargs)
+    return wrapper
 
 
 @app.route("/info", methods=["GET"])
+@catch_error
 def info():
-    browser = get_browser()
-    return_screenshot = request.args.get("return_screenshot", "false") == "true"
-    
-    if no_website_open(browser):
-        response_data = {"status": "success", "message": "No website open"}
-    else:
-        width = browser.get_window_size().get("width")
-        height = browser.get_window_size().get("height")
-        response_data = {
+    rs = request.args.get("return_screenshot", "false").lower() == "true"
+    with _lock:
+        if _no_website_open():
+            return jsonify({"status": "error", "message": "Please open a website first."})
+        pg = _ensure_browser()
+        data = {
             "status": "success",
-            "message": (
-                f"Current URL: {browser.current_url}, "
-                f"Window dimensions: {width}x{height}"
-            )
+            "title": pg.title(),
+            "url": pg.url,
+            "message": f"Title: {pg.title()} | URL: {pg.url}",
         }
-    return create_response(response_data, return_screenshot and not no_website_open(browser))
+        return _create_response(data, rs)
 
 
 @app.route("/close", methods=["POST"])
+@catch_error
 def close_browser():
-    global BROWSER
-    if BROWSER:
-        BROWSER.quit()
-        BROWSER = None
-        return create_response({"status": "success", "message": "Closed browser"}, False)
-    return create_response({"status": "error", "message": "No open windows"}, False)
+    global _playwright, _browser, _page
+    with _lock:
+        if _browser is not None:
+            _browser.close()
+        if _playwright is not None:
+            _playwright.stop()
+        _browser = _page = _playwright = None  # type: ignore[assignment]
+    return jsonify({"status": "success", "message": "Browser closed"})
 
 
 @app.route("/set_window_size", methods=["POST"])
 @validate_request("width", "height", "return_screenshot")
 @require_website_open
 @catch_error
-def set_window_size():
-    width = request.json["width"]
-    height = request.json["height"]
-    return_screenshot = request.json["return_screenshot"]
-    browser = get_browser()
-    browser.set_window_size(width, height)
-    response_data = {"status": "success", "message": f"Set window size to {width}x{height}"}
-    return create_response(response_data, return_screenshot)
+def set_window_size():  # type: ignore[override]
+    w, h = request.json["width"], request.json["height"]
+    rs = request.json["return_screenshot"]
+    with _lock:
+        _ensure_browser().set_viewport_size({"width": w, "height": h})
+        return _create_response({"status": "success", "message": f"Viewport {w}×{h}"}, rs)
 
 
 @app.route("/screenshot", methods=["GET"])
 @require_website_open
-def take_screenshot():
-    return create_response({"status": "success"}, True)
+def screenshot():
+    with _lock:
+        return _create_response({"status": "success", "message": "Screenshot"}, True)
 
 
 @app.route("/click", methods=["POST"])
 @validate_request("x", "y", "button", "return_screenshot")
 @catch_error
 @require_website_open
-def click_element():
-    x = request.json["x"]
-    y = request.json["y"]
+def click():  # type: ignore[override]
+    global _mouse_x, _mouse_y
+    x, y = request.json["x"], request.json["y"]
     button = request.json["button"]
-    return_screenshot = request.json["return_screenshot"]
-    browser = get_browser()
-    if button.lower() == "right":
-        action = ActionChains(browser)
-        action.move_by_offset(x, y).context_click().perform()
-    else:
-        assert button.lower() == "left", f"Invalid button: {button}"
-        action = ActionChains(browser)
-        action.move_by_offset(x, y).click().perform()
-    response_data = {"status": "success", "message": f"Clicked {button} button at coordinates ({x}, {y})"}
-    return create_response(response_data, return_screenshot)
+    rs = request.json["return_screenshot"]
+    with _lock:
+        _ensure_browser().mouse.click(x, y, button=button)
+        _mouse_x, _mouse_y = x, y
+        return _create_response({"status": "success", "message": f"Clicked {button} at ({x},{y})"}, rs)
 
 
 @app.route("/double_click", methods=["POST"])
 @validate_request("x", "y", "return_screenshot")
 @catch_error
 @require_website_open
-def double_click_element():
-    x = request.json["x"]
-    y = request.json["y"]
-    return_screenshot = request.json["return_screenshot"]
-    browser = get_browser()
-    action = ActionChains(browser)
-    action.move_by_offset(x, y).double_click().perform()
-    response_data = {"status": "success", "message": f"Double-clicked at coordinates ({x}, {y})"}
-    return create_response(response_data, return_screenshot)
+def double_click():  # type: ignore[override]
+    global _mouse_x, _mouse_y
+    x, y = request.json["x"], request.json["y"]
+    rs = request.json["return_screenshot"]
+    with _lock:
+        _ensure_browser().mouse.dblclick(x, y)
+        _mouse_x, _mouse_y = x, y
+        return _create_response({"status": "success", "message": f"Double‑clicked at ({x},{y})"}, rs)
 
 
 @app.route("/move", methods=["POST"])
 @validate_request("x", "y", "return_screenshot")
 @catch_error
 @require_website_open
-def move_mouse():
-    x = request.json["x"]
-    y = request.json["y"]
-    return_screenshot = request.json["return_screenshot"]
-    browser = get_browser()
-    action = ActionChains(browser)
-    action.move_by_offset(x, y).perform()
-    response_data = {"status": "success", "message": f"Moved mouse to coordinates ({x}, {y})"}
-    return create_response(response_data, return_screenshot)
+def move():  # type: ignore[override]
+    global _mouse_x, _mouse_y
+    x, y = request.json["x"], request.json["y"]
+    rs = request.json["return_screenshot"]
+    with _lock:
+        _ensure_browser().mouse.move(x, y)
+        _mouse_x, _mouse_y = x, y
+        return _create_response({"status": "success", "message": f"Moved mouse to ({x},{y})"}, rs)
 
 
 @app.route("/drag", methods=["POST"])
 @validate_request("path", "return_screenshot")
 @catch_error
 @require_website_open
-def drag_mouse():
-    path = request.json["path"]
-    return_screenshot = request.json["return_screenshot"]
-    if len(path) < 2:
-        return create_response(
-            {
-                "status": "error",
-                "message": "Path must contain at least 2 points",
-            },
-            False,
-        )
-    browser = get_browser()
-    action = ActionChains(browser)
-    start_point = path[0]
-    action.move_by_offset(start_point["x"], start_point["y"])
-    action.click_and_hold()
-    for i in range(1, len(path)):
-        current_point = path[i]
-        prev_point = path[i-1]
-        delta_x = current_point["x"] - prev_point["x"]
-        delta_y = current_point["y"] - prev_point["y"]
-        action.move_by_offset(delta_x, delta_y)
-    action.release()
-    action.perform()
-    response_data = {
-        "status": "success",
-        "message": f"Dragged along path with {len(path)} points",
-    }
-    return create_response(response_data, return_screenshot)
+def drag():  # type: ignore[override]
+    global _mouse_x, _mouse_y
+    path: List[List[int]] = request.json["path"]
+    rs = request.json["return_screenshot"]
+    if not path or len(path) < 2:
+        return jsonify({"status": "error", "message": "Path needs at least two points"})
+    with _lock:
+        pg = _ensure_browser()
+        pg.mouse.move(*path[0])
+        pg.mouse.down()
+        for x, y in path[1:]:
+            pg.mouse.move(x, y)
+        pg.mouse.up()
+        _mouse_x, _mouse_y = path[-1]
+        return _create_response({"status": "success", "message": f"Dragged {len(path)} points"}, rs)
 
 
 @app.route("/type", methods=["POST"])
 @validate_request("text", "return_screenshot")
-@require_website_open
 @catch_error
-def type_text():
-    browser = get_browser()
-    text = request.json["text"]
-    return_screenshot = request.json["return_screenshot"]
-    action = ActionChains(browser)
-    action.send_keys(text).perform()
-    response_data = {"status": "success", "message": f"Typed '{text}'"}
-    return create_response(response_data, return_screenshot)
+@require_website_open
+def type_():  # type: ignore[override]
+    txt = request.json["text"]
+    rs = request.json["return_screenshot"]
+    with _lock:
+        _ensure_browser().keyboard.type(txt)
+        return _create_response({"status": "success", "message": f"Typed {len(txt)} chars"}, rs)
 
 
 @app.route("/scroll", methods=["POST"])
-@validate_request("x", "y", "scroll_x", "scroll_y", "return_screenshot")
-@require_website_open
+@validate_request("scroll_x", "scroll_y", "return_screenshot")
 @catch_error
-def scroll_page():
-    browser = get_browser()
-    x = request.json["x"]
-    y = request.json["y"]
-    scroll_x = request.json["scroll_x"]
-    scroll_y = request.json["scroll_y"]
-    return_screenshot = request.json["return_screenshot"]
-    action = ActionChains(browser)
-    action.move_by_offset(x, y).perform()
-    browser.execute_script(f"window.scrollBy({scroll_x}, {scroll_y});")
-    response_data = {
-        "status": "success",
-        "message": f"Scrolled by ({scroll_x}, {scroll_y}) at position ({x}, {y})",
-    }
-    return create_response(response_data, return_screenshot)
-
-
-@app.route("/get_text", methods=["POST"])
-@validate_request("selector", "return_screenshot")
 @require_website_open
-@catch_error
-def get_text():
-    selector = request.json["selector"]
-    return_screenshot = request.json["return_screenshot"]
-    browser = get_browser()
-    try:
-        element = WebDriverWait(browser, LOCATE_ELEMENT_TIMEOUT).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, selector))
-        )
-    except TimeoutException:
-        return create_response({"status": "error", "message": f"Element specified by the CSS selector {selector!r} not found"}, False)
-    text = element.text
-    response_data = {
-        "status": "success",
-        "message": f"Text of element selected by {selector!r}: {text!r}",
-    }
-    return create_response(response_data, return_screenshot)
-
-
-@app.route("/get_attribute", methods=["POST"])
-@validate_request("selector", "attribute", "return_screenshot")
-@require_website_open
-@catch_error
-def get_attribute():
-    selector = request.json["selector"]
-    attribute = request.json["attribute"]
-    return_screenshot = request.json["return_screenshot"]
-    browser = get_browser()
-    try:
-        element = WebDriverWait(browser, LOCATE_ELEMENT_TIMEOUT).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, selector))
-        )
-    except TimeoutException:
-        return create_response(
-            {
-                "status": "error",
-                "message": f"Element specified by the CSS selector {selector!r} not found.",
-            },
-            False,
-        )
-    value = element.get_attribute(attribute)
-    response_data = {
-        "status": "success",
-        "message": f"Attribute {attribute} for the element specified by the CSS selector {selector!r}: {value!r}",
-    }
-    return create_response(response_data, return_screenshot)
+def scroll():  # type: ignore[override]
+    dx, dy = request.json["scroll_x"], request.json["scroll_y"]
+    rs = request.json["return_screenshot"]
+    with _lock:
+        _ensure_browser().mouse.wheel(dx, dy)
+        return _create_response({"status": "success", "message": f"Scrolled ({dx},{dy})"}, rs)
 
 
 @app.route("/execute_script", methods=["POST"])
 @validate_request("script", "return_screenshot")
-@require_website_open
 @catch_error
-def execute_script():
-    browser = get_browser()
+@require_website_open
+def exec_script():  # type: ignore[override]
     script = request.json["script"]
-    return_screenshot = request.json["return_screenshot"]
-    browser.execute_script(script)
-    response_data = {"status": "success", "message": "Script executed successfully"}
-    return create_response(response_data, return_screenshot)
+    rs = request.json["return_screenshot"]
+    with _lock:
+        result = _ensure_browser().evaluate(script)
+        return _create_response({"status": "success", "message": "Script executed", "result": result}, rs)
 
 
 @app.route("/back", methods=["POST"])
 @validate_request("return_screenshot")
 @catch_error
 @require_website_open
-def navigate_back():
-    browser = get_browser()
-    return_screenshot = request.json["return_screenshot"]
-    browser.back()
-    if no_website_open(browser):
-        browser.forward()
-        return create_response({"status": "error", "message": f"No more pages in history, still at {browser.current_url}."}, False)
-    response_data = {
-        "status": "success",
-        "message": "Navigated back",
-    }
-    return create_response(response_data, return_screenshot)
+def back():  # type: ignore[override]
+    rs = request.json["return_screenshot"]
+    with _lock:
+        _ensure_browser().go_back()
+        return _create_response({"status": "success", "message": "Back"}, rs)
 
 
 @app.route("/forward", methods=["POST"])
 @validate_request("return_screenshot")
 @catch_error
 @require_website_open
-def navigate_forward():
-    browser = get_browser()
-    return_screenshot = request.json["return_screenshot"]
-    previous_url = browser.current_url
-    browser.forward()
-    if browser.current_url == previous_url:
-        return create_response(
-            {
-                "status": "error",
-                "message": f"Already at the most recent page ({browser.current_url}).",
-            },
-            False,
-        )
-    response_data = {
-        "status": "success",
-        "message": "Navigated forward",
-    }
-    return create_response(response_data, return_screenshot)
+def forward():  # type: ignore[override]
+    rs = request.json["return_screenshot"]
+    with _lock:
+        _ensure_browser().go_forward()
+        return _create_response({"status": "success", "message": "Forward"}, rs)
 
 
 @app.route("/reload", methods=["POST"])
 @validate_request("return_screenshot")
 @catch_error
 @require_website_open
-def reload_page():
-    browser = get_browser()
-    return_screenshot = request.json["return_screenshot"]
-    browser.refresh()
-    response_data = {"status": "success", "message": "Page reloaded"}
-    return create_response(response_data, return_screenshot)
-
-
-@app.route("/list_elements", methods=["POST"])
-@validate_request("selector", "return_screenshot")
-@catch_error
-@require_website_open
-def list_elements():
-    selector = request.json["selector"]
-    return_screenshot = request.json["return_screenshot"]
-    browser = get_browser()
-    elements = browser.find_elements(By.CSS_SELECTOR, selector)
-    element_list = [element.get_attribute("outerHTML") for element in elements]
-    response_data = {"status": "success", "elements": element_list}
-    return create_response(response_data, return_screenshot)
+def reload():  # type: ignore[override]
+    rs = request.json["return_screenshot"]
+    with _lock:
+        _ensure_browser().reload()
+        return _create_response({"status": "success", "message": "Reloaded"}, rs)
 
 
 @app.route("/wait", methods=["POST"])
 @validate_request("ms", "return_screenshot")
 @catch_error
+@require_website_open
 def wait():
     ms = request.json["ms"]
-    return_screenshot = request.json["return_screenshot"]
-    time.sleep(ms / 1000.0)  # convert milliseconds to seconds
-    response_data = {"status": "success", "message": f"Waited {ms} milliseconds"}
-    return create_response(response_data, return_screenshot)
+    rs = request.json["return_screenshot"]
+    time.sleep(ms / 1000.0)
+    with _lock:
+        return _create_response({"status": "success", "message": f"Waited {ms} ms"}, rs)
 
 
 @app.route("/keypress", methods=["POST"])
 @validate_request("keys", "return_screenshot")
 @catch_error
 @require_website_open
-def keypress():
-    keys = request.json["keys"]
-    return_screenshot = request.json["return_screenshot"]
-    browser = get_browser()
-    action = ActionChains(browser)
-    modifier_keys = []
-    main_keys = []
-    for key in keys:
-        key_upper = key.upper()
-        if key_upper in ['CTRL', 'CONTROL', 'SHIFT', 'ALT', 'CMD', 'COMMAND', 'META']:
-            modifier_keys.append(KEY_MAP[key_upper])
-        elif key_upper in KEY_MAP:
-            main_keys.append(KEY_MAP[key_upper])
-        else:
-            main_keys.append(key)
-    for mod_key in modifier_keys:
-        action.key_down(mod_key)
-    for main_key in main_keys:
-        if isinstance(main_key, str) and len(main_key) == 1:
-            action.send_keys(main_key)
-        else:
-            action.send_keys(main_key)
-    for mod_key in reversed(modifier_keys):
-        action.key_up(mod_key)
-    action.perform()
-    response_data = {"status": "success", "message": f"Executed keypress: {keys}"}
-    return create_response(response_data, return_screenshot)
+def keypress():  # type: ignore[override]
+    keys: List[str] = request.json["keys"]
+    rs = request.json["return_screenshot"]
+    if not keys:
+        return jsonify({"status": "error", "message": "Keys list empty"})
+    with _lock:
+        pg = _ensure_browser()
+        for k in keys[:-1]:
+            pg.keyboard.down(k)
+        pg.keyboard.press(keys[-1])
+        for k in reversed(keys[:-1]):
+            pg.keyboard.up(k)
+        return _create_response({"status": "success", "message": f"Pressed {keys}"}, rs)
 
 
 @app.route("/goto", methods=["POST"])
 @validate_request("url", "return_screenshot")
 @catch_error
-def goto_url():
+def goto():  # type: ignore[override]
     url = request.json["url"]
-    return_screenshot = request.json["return_screenshot"]
+    rs = request.json["return_screenshot"]
     if "://" not in url:
         url = "https://" + url
-    browser = get_browser()
-    time.sleep(0.3)
-    print(f"Opening {url}")
-    try:
-        browser.get(url)
-    except WebDriverException as e:
-        if "net::ERR_NAME_NOT_RESOLVED" in str(e):
-            return create_response({"status": "error", "message": f"Could not resolve {url}"}, False)
-    response_data = {"status": "success", "message": f"Navigated to {url}"}
-    return create_response(response_data, return_screenshot)
+    with _lock:
+        _ensure_browser().goto(url, wait_until="load")
+        return _create_response({"status": "success", "message": f"Navigated to {url}"}, rs)
 
 
 def main():
-    base_url = os.environ.get("SWEER_BASEURL", "http://localhost:8009")
-    port = int(base_url.split(":")[-1])
-    app.run(host="0.0.0.0", port=port)
+    base = os.environ.get("SWEER_BASEURL", "http://localhost:8009")
+    port = int(base.split(":")[-1]) if base.split(":")[-1].isdigit() else 8009
+    app.run(host="0.0.0.0", port=port, threaded=False, use_reloader=False)
 
 
 if __name__ == "__main__":

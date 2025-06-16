@@ -19,7 +19,7 @@ class ScreenshotMode(Enum):
 
 
 BASE_URL = os.environ.get("SWEER_BASEURL", "http://localhost:8009")
-AUTOSCREENSHOT = os.environ.get("SWEER_AUTOSCREENSHOT", "0") == "1"
+AUTOSCREENSHOT = os.environ.get("SWEER_AUTOSCREENSHOT", "1") == "1"
 SCREENSHOT_MODE = ScreenshotMode(os.environ.get("SWEER_SCREENSHOT_MODE", ScreenshotMode.SAVE.value))
 
 
@@ -39,27 +39,23 @@ def send_request(endpoint, method="GET", data=None):
     return data
 
 
-def _handle_screenshot(screenshot_data, screenshot_index, mode=None):
+def _handle_screenshot(screenshot_data, mode=None):
     """Handle screenshot data according to the specified mode or default SCREENSHOT_MODE"""
     if mode is None:
         mode = SCREENSHOT_MODE
     
     if mode == ScreenshotMode.SAVE:
-        output = f"screenshot_{screenshot_index:03}.png"
-        path = Path(output)
+        path = Path("latest_screenshot.png")
         path.write_bytes(base64.b64decode(screenshot_data))
-        link_path = Path("latest_screenshot.png")
-        link_path.unlink(missing_ok=True)
-        link_path.symlink_to(path)
         print(f"Screenshot saved to {path}")
     elif mode == ScreenshotMode.PRINT:
-        print(f"![Screenshot {screenshot_index}](data:image/png;base64,{screenshot_data})")
+        print(f"![Screenshot](data:image/png;base64,{screenshot_data})")
 
 
 def _autosave_screenshot_from_response(response, mode=None):
     """Handle screenshot from response data according to the specified mode"""
     if "screenshot" in response and AUTOSCREENSHOT:
-        _handle_screenshot(response["screenshot"], response["screenshot_index"], mode)
+        _handle_screenshot(response["screenshot"], mode)
 
 
 @cl.group()
@@ -67,7 +63,7 @@ def cli():
     pass
 
 
-@cli.command(short_help="Open a website URL.")
+@cli.command(short_help="Open a website URL.", context_settings={"allow_interspersed_args": False})
 @cl.argument("url")
 def open(url):
     """Open the specified website URL."""
@@ -78,20 +74,19 @@ def open(url):
     _autosave_screenshot_from_response(response)
 
 
-@cli.command(short_help="Close the current window.")
+@cli.command(short_help="Close the current window.", context_settings={"allow_interspersed_args": False})
 def close():
     """Close the currently open window."""
     response = send_request("close", "POST")
     print(response["message"])
 
 
-@cli.command(short_help="Take a screenshot using default SCREENSHOT_MODE behavior.")
+@cli.command(short_help="Take a screenshot using default SCREENSHOT_MODE behavior.", context_settings={"allow_interspersed_args": False})
 @cl.option("--output", "-o", default=None, help="Output path for the screenshot (only used in save mode).")
 def screenshot(output):
     """Capture a screenshot and handle it according to the default SCREENSHOT_MODE."""
     response = send_request("screenshot", "GET")
     screenshot_data = response["screenshot"]
-    screenshot_index = response["screenshot_index"]
     
     if SCREENSHOT_MODE == ScreenshotMode.SAVE:
         if output:
@@ -99,37 +94,35 @@ def screenshot(output):
             path.write_bytes(base64.b64decode(screenshot_data))
             print(f"Screenshot saved to {path}")
         else:
-            _handle_screenshot(screenshot_data, screenshot_index, ScreenshotMode.SAVE)
+            _handle_screenshot(screenshot_data, ScreenshotMode.SAVE)
     else:
-        _handle_screenshot(screenshot_data, screenshot_index, ScreenshotMode.PRINT)
+        _handle_screenshot(screenshot_data, ScreenshotMode.PRINT)
 
 
-@cli.command(short_help="Take a screenshot and always save it to file.")
+@cli.command(short_help="Take a screenshot and always save it to file.", context_settings={"allow_interspersed_args": False})
 @cl.option("--output", "-o", default=None, help="Output path for the screenshot.")
 def save_screenshot(output):
     """Capture a screenshot and always save it to file, regardless of SCREENSHOT_MODE."""
     response = send_request("screenshot", "GET")
     screenshot_data = response["screenshot"]
-    screenshot_index = response["screenshot_index"]
     
     if output:
         path = Path(output)
         path.write_bytes(base64.b64decode(screenshot_data))
         print(f"Screenshot saved to {path}")
     else:
-        _handle_screenshot(screenshot_data, screenshot_index, ScreenshotMode.SAVE)
+        _handle_screenshot(screenshot_data, ScreenshotMode.SAVE)
 
 
-@cli.command(short_help="Take a screenshot and always print it as base64.")
+@cli.command(short_help="Take a screenshot and always print it as base64.", context_settings={"allow_interspersed_args": False})
 def print_screenshot():
     """Capture a screenshot and always print it as base64, regardless of SCREENSHOT_MODE."""
     response = send_request("screenshot", "GET")
     screenshot_data = response["screenshot"]
-    screenshot_index = response["screenshot_index"]
-    _handle_screenshot(screenshot_data, screenshot_index, ScreenshotMode.PRINT)
+    _handle_screenshot(screenshot_data, ScreenshotMode.PRINT)
 
 
-@cli.command(short_help="Click at coordinates")
+@cli.command(short_help="Click at coordinates", context_settings={"allow_interspersed_args": False})
 @cl.argument("x", type=int)
 @cl.argument("y", type=int)
 @cl.option("--button", "-b", default="left", type=cl.Choice(["left", "right"]), help="Mouse button to click")
@@ -144,7 +137,7 @@ def click(x, y, button):
     _autosave_screenshot_from_response(response)
 
 
-@cli.command(short_help="Double-click at coordinates")
+@cli.command(short_help="Double-click at coordinates", context_settings={"allow_interspersed_args": False})
 @cl.argument("x", type=int)
 @cl.argument("y", type=int)
 def double_click(x, y):
@@ -154,7 +147,7 @@ def double_click(x, y):
     _autosave_screenshot_from_response(response)
 
 
-@cli.command(short_help="Move mouse to coordinates")
+@cli.command(short_help="Move mouse to coordinates", context_settings={"allow_interspersed_args": False})
 @cl.argument("x", type=int)
 @cl.argument("y", type=int)
 def move(x, y):
@@ -164,10 +157,10 @@ def move(x, y):
     _autosave_screenshot_from_response(response)
 
 
-@cli.command(short_help="Drag mouse along a path")
+@cli.command(short_help="Drag mouse along a path", context_settings={"allow_interspersed_args": False})
 @cl.argument("path")
 def drag(path):
-    """Drag mouse along a path. Path should be a JSON string like '[{"x":100,"y":100},{"x":200,"y":200}]'."""
+    """Drag mouse along a path. Path should be a JSON list of x, y lists: '[[0, 0], [100, 100]]'."""
     import json
     try:
         path_data = json.loads(path)
@@ -179,7 +172,7 @@ def drag(path):
     _autosave_screenshot_from_response(response)
 
 
-@cli.command(short_help="Type text.")
+@cli.command(short_help="Type text.", context_settings={"allow_interspersed_args": False})
 @cl.argument("text")
 def type(text):
     """Type the given text at the current cursor position."""
@@ -188,40 +181,17 @@ def type(text):
     _autosave_screenshot_from_response(response)
 
 
-@cli.command(short_help="Scroll the page.")
-@cl.argument("x", type=int)
-@cl.argument("y", type=int)
+@cli.command(short_help="Scroll the page.", context_settings={"allow_interspersed_args": False})
 @cl.argument("scroll_x", type=int)
 @cl.argument("scroll_y", type=int)
-def scroll(x, y, scroll_x, scroll_y):
-    """Scroll by (scroll_x, scroll_y) pixels at position (x, y)."""
-    response = send_request("scroll", "POST", {"x": x, "y": y, "scroll_x": scroll_x, "scroll_y": scroll_y, "return_screenshot": AUTOSCREENSHOT})
+def scroll(scroll_x, scroll_y):
+    """Scroll by (scroll_x, scroll_y) pixels at current mouse position."""
+    response = send_request("scroll", "POST", {"scroll_x": scroll_x, "scroll_y": scroll_y, "return_screenshot": AUTOSCREENSHOT})
     print(response["message"])
     _autosave_screenshot_from_response(response)
 
 
-@cli.command(short_help="Get text from an element.")
-@cl.argument("selector")
-def get_text(selector):
-    """Retrieve the text content from an element specified by its selector."""
-    response = send_request("get_text", "POST", {"selector": selector, "return_screenshot": False})
-    print(response["message"])
-    _autosave_screenshot_from_response(response)
-
-@cli.command(short_help="Get an attribute value from an element.")
-@cl.argument("selector")
-@cl.argument("attribute")
-def get_attribute(selector, attribute):
-    """Get the value of a specific attribute from an element identified by its selector."""
-    response = send_request(
-        "get_attribute",
-        "POST",
-        {"selector": selector, "attribute": attribute, "return_screenshot": AUTOSCREENSHOT},
-    )
-    print(response["message"])
-    _autosave_screenshot_from_response(response)
-
-@cli.command(short_help="Execute a custom JavaScript script.")
+@cli.command(short_help="Execute a custom JavaScript script.", context_settings={"allow_interspersed_args": False})
 @cl.argument("script")
 def execute_script(script):
     """Execute a custom JavaScript code snippet on the current page."""
@@ -234,15 +204,15 @@ def execute_script(script):
     _autosave_screenshot_from_response(response)
 
 
-@cli.command(short_help="Get information about the current page.")
+@cli.command(short_help="Get information about the current page.", context_settings={"allow_interspersed_args": False})
 def info():
     """Get information about the current page."""
     response = send_request("info", "GET")
-    print(response["message"])
+    print(response["message"])    
     _autosave_screenshot_from_response(response)
 
 
-@cli.command(short_help="Navigate back in browser history.")
+@cli.command(short_help="Navigate back in browser history.", context_settings={"allow_interspersed_args": False})
 def back():
     """Navigate back in the browser history."""
     response = send_request("back", "POST", {"return_screenshot": AUTOSCREENSHOT})
@@ -250,7 +220,7 @@ def back():
     _autosave_screenshot_from_response(response)
 
 
-@cli.command(short_help="Navigate forward in browser history.")
+@cli.command(short_help="Navigate forward in browser history.", context_settings={"allow_interspersed_args": False})
 def forward():
     """Navigate forward in the browser history."""
     response = send_request("forward", "POST", {"return_screenshot": AUTOSCREENSHOT})
@@ -258,7 +228,7 @@ def forward():
     _autosave_screenshot_from_response(response)
 
 
-@cli.command(short_help="Reload the current page.")
+@cli.command(short_help="Reload the current page.", context_settings={"allow_interspersed_args": False})
 def reload():
     """Reload the current webpage."""
     response = send_request("reload", "POST", {"return_screenshot": AUTOSCREENSHOT})
@@ -266,21 +236,7 @@ def reload():
     _autosave_screenshot_from_response(response)
 
 
-@cli.command(short_help="List elements matching a selector.")
-@cl.argument("selector")
-def list_elements(selector):
-    """List all elements matching the given selector."""
-    response = send_request(
-        "list_elements", "POST", {"selector": selector, "return_screenshot": AUTOSCREENSHOT},
-    )
-    elements = response["elements"]
-    print(f"Found {len(elements)} elements")
-    for element in elements:
-        print(element)
-    _autosave_screenshot_from_response(response)
-
-
-@cli.command(short_help="Wait for specified time.")
+@cli.command(short_help="Wait for specified time.", context_settings={"allow_interspersed_args": False})
 @cl.argument("ms", type=int)
 def wait(ms):
     """Wait for the specified number of milliseconds."""
@@ -291,7 +247,7 @@ def wait(ms):
     _autosave_screenshot_from_response(response)
 
 
-@cli.command(short_help="Press keys.")
+@cli.command(short_help="Press keys.", context_settings={"allow_interspersed_args": False})
 @cl.argument("keys")
 def keypress(keys):
     """Press the specified keys. Keys should be a JSON string like '["ctrl", "c"]'."""
@@ -308,7 +264,7 @@ def keypress(keys):
     _autosave_screenshot_from_response(response)
 
 
-@cli.command(short_help="Set window size.")
+@cli.command(short_help="Set window size.", context_settings={"allow_interspersed_args": False})
 @cl.argument("width", type=int)
 @cl.argument("height", type=int)
 def set_window_size(width, height):
