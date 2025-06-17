@@ -13,7 +13,7 @@ from typing import Any, List
 from flask import Flask, jsonify, request, Response
 from playwright.sync_api import Browser, Page, Playwright, sync_playwright
 
-from .utils import catch_error, validate_request
+from sweer.utils import catch_error, validate_request, normalize_url
 
 
 app = Flask(__name__)
@@ -376,10 +376,8 @@ def keypress():  # type: ignore[override]
 @validate_request("url", "return_screenshot")
 @catch_error
 def goto():  # type: ignore[override]
-    url = request.json["url"]
+    url = normalize_url(request.json["url"])
     rs = request.json["return_screenshot"]
-    if "://" not in url:
-        url = "https://" + url
     with _lock:
         _ensure_browser().goto(url, wait_until="load")
         return _create_response({"status": "success", "message": f"Navigated to {url}"}, rs)

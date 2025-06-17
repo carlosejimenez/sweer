@@ -1,7 +1,21 @@
 import functools
 import os
 
+from pathlib import Path
 from flask import jsonify, request
+
+
+def normalize_url(url: str) -> str:
+    # if starts with http:// or https://, return as is
+    # if starts with file://, return as is
+    # elif local file path exists, return as file://
+    # else: return as https://
+    if any(url.startswith(prefix) for prefix in ["http://", "https://", "file://"]):
+        return url
+    elif Path(url).exists():
+        return f"file://{Path(url).resolve()}"
+    else:
+        return "https://" + url
 
 
 def validate_request(*required_keys):
