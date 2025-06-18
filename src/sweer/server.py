@@ -48,39 +48,65 @@ def require_website_open(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         if not browser_manager.is_website_open():
-            return jsonify({"status": "error", "message": "Please open a website first."})
+            return create_response({"status": "error", "message": "Please open a website first."}, False)
         return func(*args, **kwargs)
     return wrapper
 
 
+def _get_response_metadata() -> dict[str, Any]:
+    """Gather comprehensive metadata for API responses."""
+    metadata = {}
+    if browser_manager.is_website_open():
+        metadata["Browser Type"] = browser_manager.browser_name
+        metadata["Mouse Position"] = f"({browser_manager.mouse_x},{browser_manager.mouse_y})"
+        metadata["Viewport Size"] = f"{browser_manager.window_width}×{browser_manager.window_height}"
+        with browser_manager._browser_lock() as page:
+            metadata["Current URL"] = page.url
+            metadata["Page Title"] = page.title()
+            
+            scroll_info = page.evaluate("""() => ({
+                scroll_position: { x: window.pageXOffset || document.documentElement.scrollLeft, y: window.pageYOffset || document.documentElement.scrollTop },
+                page_dimensions: { width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight },
+                visible_dimensions: { width: window.innerWidth, height: window.innerHeight }
+            })""")
+            scroll_pos = scroll_info["scroll_position"]
+            page_dims = scroll_info["page_dimensions"]
+            visible_dims = scroll_info["visible_dimensions"]
+            metadata["Scroll Position"] = f"({scroll_pos['x']},{scroll_pos['y']})"
+            metadata["Page Dimensions"] = f"{page_dims['width']}×{page_dims['height']}"
+            metadata["Visible Dimensions"] = f"{visible_dims['width']}×{visible_dims['height']}"
+    return metadata
+
+
 def create_response(data: dict[str, Any], return_screenshot: bool) -> Response:
-    """Create a JSON response, optionally including a screenshot."""
+    """Create a JSON response with comprehensive metadata and optional screenshot."""
+    response_data = {**data}
+    if "metadata" not in response_data:
+        response_data["metadata"] = {}
+    response_data["metadata"].update(_get_response_metadata())
     if return_screenshot:
-        data.update(browser_manager.take_screenshot())
-    return jsonify(data)
+        response_data.update(browser_manager.take_screenshot())
+    return jsonify(response_data)
 
 
 @app.route("/info", methods=["GET"])
 @catch_error
 def info():
-    return_screenshot = request.args.get("return_screenshot", "false").lower() == "true"
     if not browser_manager.is_website_open():
-        return jsonify({"status": "error", "message": "Please open a website first."})
-    with browser_manager._browser_lock() as page:
-        data = {
-            "status": "success",
-            "title": page.title(),
-            "url": page.url,
-            "message": f"Title: {page.title()} | URL: {page.url}",
-        }
-        return create_response(data, return_screenshot)
+        return create_response({"status": "success", "message": "No page open"}, False)
+    data = {
+        "status": "success",
+        "message": "Loaded info for current page",
+    }
+    return create_response(data, False)
 
 
 @app.route("/close", methods=["POST"])
 @catch_error
 def close_browser():
     browser_manager.cleanup()
-    return jsonify({"status": "success", "message": "Browser closed"})
+    browser_manager._init_browser()
+    return create_response({"status": "success", "message": "Closed browser"}, False)
 
 
 @app.route("/set_window_size", methods=["POST"])
@@ -91,16 +117,16 @@ def set_window_size():
     width, height = request.json["width"], request.json["height"]
     return_screenshot = request.json["return_screenshot"]
     if width <= 0 or height <= 0:
-        return jsonify({
+        return create_response({
             "status": "error", 
             "message": f"Invalid dimensions ({width},{height}). Must be positive"
-        })
+        }, False)
     with browser_manager._browser_lock() as page:
         page.set_viewport_size({"width": width, "height": height})
         browser_manager.window_width = width
         browser_manager.window_height = height
         browser_manager.constrain_mouse_position(page)
-        data = {"status": "success", "message": f"Viewport {width}×{height}"}
+        data = {"status": "success", "message": f"Set viewport to {width}×{height}"}
         return create_response(data, return_screenshot)
 
 
@@ -121,14 +147,14 @@ def click():
     return_screenshot = request.json["return_screenshot"]
     x_valid, y_valid = browser_manager.validate_coordinates(x, y)
     if not x_valid or not y_valid:
-        return jsonify({
+        return create_response({
             "status": "error", 
             "message": f"Invalid coordinates ({x},{y}). Must be within {browser_manager.window_width}x{browser_manager.window_height}"
-        })
+        }, False)
     with browser_manager._browser_lock() as page:
         page.mouse.click(x, y, button=button)
         browser_manager.mouse_x, browser_manager.mouse_y = x, y
-        data = {"status": "success", "message": f"Clicked {button} at ({x},{y})"}
+        data = {"status": "success", "message": f"Clicked '{button}' at ({x},{y})"}
         return create_response(data, return_screenshot)
 
 
@@ -141,10 +167,10 @@ def double_click():
     return_screenshot = request.json["return_screenshot"]
     x_valid, y_valid = browser_manager.validate_coordinates(x, y)
     if not x_valid or not y_valid:
-        return jsonify({
+        return create_response({
             "status": "error", 
             "message": f"Invalid coordinates ({x},{y}). Must be within {browser_manager.window_width}x{browser_manager.window_height}"
-        })
+        }, False)
     with browser_manager._browser_lock() as page:
         page.mouse.dblclick(x, y)
         browser_manager.mouse_x, browser_manager.mouse_y = x, y
@@ -161,10 +187,10 @@ def move():
     return_screenshot = request.json["return_screenshot"]
     x_valid, y_valid = browser_manager.validate_coordinates(x, y)
     if not x_valid or not y_valid:
-        return jsonify({
+        return create_response({
             "status": "error", 
             "message": f"Invalid coordinates ({x},{y}). Must be within {browser_manager.window_width}x{browser_manager.window_height}"
-        })
+        }, False)
     with browser_manager._browser_lock() as page:
         page.mouse.move(x, y)
         browser_manager.mouse_x, browser_manager.mouse_y = x, y
@@ -180,17 +206,17 @@ def drag():
     path: list[list[int]] = request.json["path"]
     return_screenshot = request.json["return_screenshot"]
     if not path or len(path) < 2:
-        return jsonify({"status": "error", "message": "Path needs at least two points"})
+        return create_response({"status": "error", "message": "Path needs at least two points"}, False)
     for ix, point in enumerate(path):
         if len(point) != 2:
-            return jsonify({"status": "error", "message": f"Path point {ix} must have exactly 2 coordinates"})
+            return create_response({"status": "error", "message": f"Path point {ix} must have exactly 2 coordinates"}, False)
         x, y = point
         x_valid, y_valid = browser_manager.validate_coordinates(x, y)
         if not x_valid or not y_valid:
-            return jsonify({
+            return create_response({
                 "status": "error", 
                 "message": f"Invalid coordinates ({x},{y}) at path point {ix}. Must be within {browser_manager.window_width}x{browser_manager.window_height}"
-            })
+            }, False)
     
     with browser_manager._browser_lock() as page:
         page.mouse.move(*path[0])
@@ -199,7 +225,7 @@ def drag():
             page.mouse.move(x, y)
         page.mouse.up()
         browser_manager.mouse_x, browser_manager.mouse_y = path[-1]
-        data = {"status": "success", "message": f"Dragged {len(path)} points"}
+        data = {"status": "success", "message": "Dragged the mouse along the path"}
         return create_response(data, return_screenshot)
 
 
@@ -212,7 +238,7 @@ def type_():
     return_screenshot = request.json["return_screenshot"]
     with browser_manager._browser_lock() as page:
         page.keyboard.type(text)
-        data = {"status": "success", "message": f"Typed {len(text)} chars"}
+        data = {"status": "success", "message": f"Typed '{text}'"}
         return create_response(data, return_screenshot)
 
 
@@ -225,7 +251,7 @@ def scroll():
     return_screenshot = request.json["return_screenshot"]
     with browser_manager._browser_lock() as page:
         page.mouse.wheel(delta_x, delta_y)
-        data = {"status": "success", "message": f"Scrolled ({delta_x},{delta_y})"}
+        data = {"status": "success", "message": f"Scrolled by ({delta_x},{delta_y})"}
         return create_response(data, return_screenshot)
 
 
@@ -238,7 +264,12 @@ def exec_script():
     return_screenshot = request.json["return_screenshot"]
     with browser_manager._browser_lock() as page:
         result = page.evaluate(script)
-        data = {"status": "success", "message": "Script executed", "result": result}
+        data = {
+            "status": "success",
+            "message": (
+                f"Script executed.\n<script_result>\n{result}\n</script_result>"
+            )
+        }
         return create_response(data, return_screenshot)
 
 
@@ -250,7 +281,7 @@ def back():
     return_screenshot = request.json["return_screenshot"]
     with browser_manager._browser_lock() as page:
         page.go_back()
-        data = {"status": "success", "message": "Back"}
+        data = {"status": "success", "message": "Navigated back"}
         return create_response(data, return_screenshot)
 
 
@@ -262,7 +293,7 @@ def forward():
     return_screenshot = request.json["return_screenshot"]    
     with browser_manager._browser_lock() as page:
         page.go_forward()
-        data = {"status": "success", "message": "Forward"}
+        data = {"status": "success", "message": "Navigated forward"}
         return create_response(data, return_screenshot)
 
 
@@ -274,7 +305,7 @@ def reload():
     return_screenshot = request.json["return_screenshot"]
     with browser_manager._browser_lock() as page:
         page.reload()
-        data = {"status": "success", "message": "Reloaded"}
+        data = {"status": "success", "message": "Reloaded the page"}
         return create_response(data, return_screenshot)
 
 
@@ -298,16 +329,16 @@ def keypress():
     keys: list[str] = request.json["keys"]
     return_screenshot = request.json["return_screenshot"]
     if not isinstance(keys, list):
-        return jsonify({"status": "error", "message": "Keys must be a list"})
+        return create_response({"status": "error", "message": "Keys must be a list"}, False)
     if not keys:
-        return jsonify({"status": "error", "message": "Keys list empty"})
+        return create_response({"status": "error", "message": "Keys list empty"}, False)
     with browser_manager._browser_lock() as page:
         for key in keys[:-1]:
             page.keyboard.down(key)
         page.keyboard.press(keys[-1])
         for key in reversed(keys[:-1]):
             page.keyboard.up(key)
-        data = {"status": "success", "message": f"Pressed {keys}"}
+        data = {"status": "success", "message": f"Pressed keys {keys}"}
         return create_response(data, return_screenshot)
 
 

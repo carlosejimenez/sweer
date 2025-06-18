@@ -14,6 +14,13 @@ from sweer.utils import ScreenshotMode
 config = Config()
 
 
+def _format_metadata_info(response):
+    """Format metadata information from API response for display."""
+    if "metadata" not in response or not response["metadata"]:
+        return ""
+    return "\n".join(f"{key}: {value}" for key, value in response["metadata"].items())
+
+
 def send_request(endpoint, method="GET", data=None):
     url = f"{config.base_url}/{endpoint}"
     if method == "GET":
@@ -25,9 +32,23 @@ def send_request(endpoint, method="GET", data=None):
         sys.exit(2)
     data = response.json()
     if data["status"] == "error":
-        print(f"Error: {data['message']}")
+        metadata_info = _format_metadata_info(data)
+        error_message = data['message']
+        print(f"ACTION ERROR:\n{error_message}")
+        if metadata_info:
+            print(f"\nMETADATA:\n{metadata_info}")
         sys.exit(1)
     return data
+
+
+def _print_response_with_metadata(response):
+    """Print response message with formatted metadata information."""
+    message = response.get("message", "")
+    metadata_info = _format_metadata_info(response)
+    print(f"ACTION RESPONSE:\n{message}")
+    
+    if metadata_info:
+        print(f"\nMETADATA:\n{metadata_info}")
 
 
 def _handle_screenshot(screenshot_data, mode=None):
@@ -38,7 +59,7 @@ def _handle_screenshot(screenshot_data, mode=None):
     if mode == ScreenshotMode.SAVE:
         path = Path("latest_screenshot.png")
         path.write_bytes(base64.b64decode(screenshot_data))
-        print(f"Screenshot saved to {path}")
+        print(f"![Screenshot]({path})")
     elif mode == ScreenshotMode.PRINT:
         print(f"![Screenshot](data:image/png;base64,{screenshot_data})")
 
@@ -61,7 +82,7 @@ def open(url):
     if Path(url).is_file():
         url = f"file://{Path(url).resolve()}"
     response = send_request("goto", "POST", {"url": url, "return_screenshot": config.autoscreenshot})
-    print(response["message"])
+    _print_response_with_metadata(response)
     _autosave_screenshot_from_response(response)
 
 
@@ -69,7 +90,7 @@ def open(url):
 def close():
     """Close the currently open window."""
     response = send_request("close", "POST")
-    print(response["message"])
+    _print_response_with_metadata(response)
 
 
 @cli.command(short_help="Take a screenshot using default config.screenshot_mode behavior.", context_settings=config.cli_context_settings)
@@ -78,7 +99,7 @@ def screenshot(output):
     """Capture a screenshot and handle it according to the default config.screenshot_mode."""
     response = send_request("screenshot", "GET")
     screenshot_data = response["screenshot"]
-    
+    _print_response_with_metadata(response)
     if config.screenshot_mode == ScreenshotMode.SAVE:
         if output:
             path = Path(output)
@@ -96,7 +117,7 @@ def save_screenshot(output):
     """Capture a screenshot and always save it to file, regardless of config.screenshot_mode."""
     response = send_request("screenshot", "GET")
     screenshot_data = response["screenshot"]
-    
+    _print_response_with_metadata(response)
     if output:
         path = Path(output)
         path.write_bytes(base64.b64decode(screenshot_data))
@@ -110,6 +131,7 @@ def print_screenshot():
     """Capture a screenshot and always print it as base64, regardless of config.screenshot_mode."""
     response = send_request("screenshot", "GET")
     screenshot_data = response["screenshot"]
+    _print_response_with_metadata(response)
     _handle_screenshot(screenshot_data, ScreenshotMode.PRINT)
 
 
@@ -124,7 +146,7 @@ def click(x, y, button):
         "POST",
         {"x": x, "y": y, "button": button, "return_screenshot": config.autoscreenshot},
     )
-    print(response["message"])    
+    _print_response_with_metadata(response)
     _autosave_screenshot_from_response(response)
 
 
@@ -134,7 +156,7 @@ def click(x, y, button):
 def double_click(x, y):
     """Double-click at the specified coordinates (x, y)."""
     response = send_request("double_click", "POST", {"x": x, "y": y, "return_screenshot": config.autoscreenshot})
-    print(response["message"])
+    _print_response_with_metadata(response)
     _autosave_screenshot_from_response(response)
 
 
@@ -144,7 +166,7 @@ def double_click(x, y):
 def move(x, y):
     """Move mouse to the specified coordinates (x, y)."""
     response = send_request("move", "POST", {"x": x, "y": y, "return_screenshot": config.autoscreenshot})
-    print(response["message"])
+    _print_response_with_metadata(response)
     _autosave_screenshot_from_response(response)
 
 
@@ -159,7 +181,7 @@ def drag(path):
         print("Error: Path must be valid JSON")
         sys.exit(1)
     response = send_request("drag", "POST", {"path": path_data, "return_screenshot": config.autoscreenshot})
-    print(response["message"])
+    _print_response_with_metadata(response)
     _autosave_screenshot_from_response(response)
 
 
@@ -168,7 +190,7 @@ def drag(path):
 def type(text):
     """Type the given text at the current cursor position."""
     response = send_request("type", "POST", {"text": text, "return_screenshot": config.autoscreenshot})
-    print(response["message"])
+    _print_response_with_metadata(response)
     _autosave_screenshot_from_response(response)
 
 
@@ -178,7 +200,7 @@ def type(text):
 def scroll(scroll_x, scroll_y):
     """Scroll by (scroll_x, scroll_y) pixels at current mouse position."""
     response = send_request("scroll", "POST", {"scroll_x": scroll_x, "scroll_y": scroll_y, "return_screenshot": config.autoscreenshot})
-    print(response["message"])
+    _print_response_with_metadata(response)
     _autosave_screenshot_from_response(response)
 
 
@@ -191,7 +213,7 @@ def execute_script(script):
         "POST",
         {"script": script, "return_screenshot": config.autoscreenshot},
     )
-    print(response["message"])
+    _print_response_with_metadata(response)
     _autosave_screenshot_from_response(response)
 
 
@@ -199,7 +221,7 @@ def execute_script(script):
 def info():
     """Get information about the current page."""
     response = send_request("info", "GET")
-    print(response["message"])    
+    _print_response_with_metadata(response)
     _autosave_screenshot_from_response(response)
 
 
@@ -207,7 +229,7 @@ def info():
 def back():
     """Navigate back in the browser history."""
     response = send_request("back", "POST", {"return_screenshot": config.autoscreenshot})
-    print(response["message"])
+    _print_response_with_metadata(response)
     _autosave_screenshot_from_response(response)
 
 
@@ -215,7 +237,7 @@ def back():
 def forward():
     """Navigate forward in the browser history."""
     response = send_request("forward", "POST", {"return_screenshot": config.autoscreenshot})
-    print(response["message"])
+    _print_response_with_metadata(response)
     _autosave_screenshot_from_response(response)
 
 
@@ -223,7 +245,7 @@ def forward():
 def reload():
     """Reload the current webpage."""
     response = send_request("reload", "POST", {"return_screenshot": config.autoscreenshot})
-    print(response["message"])
+    _print_response_with_metadata(response)
     _autosave_screenshot_from_response(response)
 
 
@@ -234,7 +256,7 @@ def wait(ms):
     response = send_request(
         "wait", "POST", {"ms": ms, "return_screenshot": config.autoscreenshot},
     )
-    print(response["message"])
+    _print_response_with_metadata(response)
     _autosave_screenshot_from_response(response)
 
 
@@ -251,7 +273,7 @@ def keypress(keys):
     response = send_request(
         "keypress", "POST", {"keys": keys_data, "return_screenshot": config.autoscreenshot},
     )
-    print(response["message"])
+    _print_response_with_metadata(response)
     _autosave_screenshot_from_response(response)
 
 
@@ -265,7 +287,7 @@ def set_window_size(width, height):
         "POST",
         {"width": width, "height": height, "return_screenshot": config.autoscreenshot},
     )
-    print(response["message"])
+    _print_response_with_metadata(response)
     _autosave_screenshot_from_response(response)
 
 

@@ -74,8 +74,7 @@ class BrowserManager:
     """Manages Playwright browser instance with proper resource cleanup."""
     
     def __init__(self):
-        self.playwright: Playwright | None = None
-        self.browser: Browser | None = None
+        self.headless = config.headless
         self.page: Page | None = None
         self.screenshot_index = 0
         self.mouse_x = 0
@@ -83,9 +82,18 @@ class BrowserManager:
         self._lock = threading.RLock()
         self.window_width = config.window_width
         self.window_height = config.window_height
-        self.headless = config.headless
         self.screenshot_delay = config.screenshot_delay
         self.crosshair_id = config.crosshair_id
+        self._init_browser()
+    
+    def _init_browser(self):
+        self.playwright: Playwright = sync_playwright().start()
+        self.browser: Browser = self.playwright.chromium.launch(headless=self.headless)
+    
+    @property
+    def browser_name(self) -> str:
+        """Get the name of the browser."""
+        return self.browser.browser_type.name
     
     @contextlib.contextmanager
     def _browser_lock(self):
@@ -97,8 +105,6 @@ class BrowserManager:
         """Launch Chromium lazily and move cursor to (0,0) once."""
         if self.page is not None:
             return self.page
-        self.playwright = sync_playwright().start()
-        self.browser = self.playwright.chromium.launch(headless=self.headless)
         ctx = self.browser.new_context(
             viewport={"width": self.window_width, "height": self.window_height}
         )
@@ -163,8 +169,8 @@ class BrowserManager:
             }
     
     def validate_coordinates(self, x: int, y: int) -> tuple[bool, bool]:
-        x_is_valid = 0 <= x < self.window_width
-        y_is_valid = 0 <= y < self.window_height
+        x_is_valid = 0 <= x <= self.window_width
+        y_is_valid = 0 <= y <= self.window_height
         return (x_is_valid, y_is_valid)
     
     def constrain_mouse_position(self, page: Page) -> bool:
