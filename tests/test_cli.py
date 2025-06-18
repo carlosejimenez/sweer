@@ -2,20 +2,37 @@ from __future__ import annotations
 
 import subprocess
 import time
+import json
+import os
+import socket
 from pathlib import Path
 
 import pytest
 
+def get_free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(('', 0))
+        s.listen(1)
+        port = s.getsockname()[1]
+    return port
+
+
 TEST_SITE_DIR = Path(__file__).parent / "test_site"
 TEST_HTML_FILE = TEST_SITE_DIR / "index.html"
+TEST_PORT = get_free_port()
 
 
 @pytest.fixture(scope="module")
 def sweer_backend():
+    env = os.environ.copy()
+    env["SWEER_PORT"] = str(TEST_PORT)
+    env["SWEER_BROWSER_TYPE"] = "chromium"
+    
     process = subprocess.Popen(
         ["sweer-backend"],
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE
+        stderr=subprocess.PIPE,
+        env=env,
     )
     time.sleep(2)
     yield process
@@ -24,11 +41,30 @@ def sweer_backend():
 
 
 def run_sweer_command(*args):
+    env = os.environ.copy()
+    env["SWEER_PORT"] = str(TEST_PORT)
     return subprocess.run(
         ["sweer"] + list(args),
         capture_output=True,
-        text=True
+        text=True,
+        env=env,
     )
+
+
+class TestKeyPress:
+    @pytest.mark.slow()
+    def test_every_key(self, sweer_backend):
+        result = run_sweer_command("open", str(TEST_HTML_FILE))
+        assert result.returncode == 0, (
+            f"Open command with '{TEST_HTML_FILE}' should return zero exit code"
+        )
+        from sweer.browser_manager import KEY_MAP
+        for key in KEY_MAP.keys():
+            inputs = json.dumps([key])
+            result = run_sweer_command("keypress", inputs)
+            assert result.returncode == 0, (
+                f"Keypress command with '{inputs}' should return zero exit code"
+            )
 
 
 class TestInvalidCLICommands:

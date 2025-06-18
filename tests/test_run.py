@@ -23,4 +23,3 @@ def sweer_backend():
 
 def test_backend_starts_successfully(sweer_backend):
     assert sweer_backend.poll() is None
-

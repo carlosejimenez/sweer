@@ -13,10 +13,10 @@ from typing import Any
 from flask import Flask, Response, jsonify, request
 
 from sweer.browser_manager import BrowserManager
-from sweer.config import Config
+from sweer.config import ServerConfig
 from sweer.utils import catch_error, normalize_url, validate_request
 
-config = Config()
+config = ServerConfig()
 
 
 browser_manager = BrowserManager()
@@ -334,10 +334,10 @@ def keypress():
         return create_response({"status": "error", "message": "Keys list empty"}, False)
     with browser_manager._browser_lock() as page:
         for key in keys[:-1]:
-            page.keyboard.down(key)
-        page.keyboard.press(keys[-1])
+            browser_manager.key_down(key)
+        browser_manager.key_press(keys[-1])
         for key in reversed(keys[:-1]):
-            page.keyboard.up(key)
+            browser_manager.key_up(key)
         data = {"status": "success", "message": f"Pressed keys {keys}"}
         return create_response(data, return_screenshot)
 
@@ -356,9 +356,8 @@ def goto():
 
 def main():
     """Run the Flask server with proper cleanup handling."""
-    port = int(config.base_url.strip("/").split(":")[-1])
     try:
-        app.run(host="0.0.0.0", port=port, threaded=False, use_reloader=False)
+        app.run(host="0.0.0.0", port=config.port, threaded=False, use_reloader=False)
     except KeyboardInterrupt:
         print("\nShutting down gracefully...")
     finally:

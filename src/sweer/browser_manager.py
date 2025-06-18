@@ -8,10 +8,12 @@ from typing import Any
 
 from playwright.sync_api import Browser, Page, Playwright, sync_playwright
 
-from sweer.config import Config
+from sweer.config import ServerConfig
 
-config = Config()
+config = ServerConfig()
 
+# Supported browser types
+SUPPORTED_BROWSERS = {"chromium", "firefox", "webkit"}
 
 CROSSHAIR_JS = """
 ([x, y, id]) => {
@@ -70,11 +72,78 @@ REMOVE_CROSSHAIR_JS = """
 """
 
 
+KEY_MAP = {    
+    # Function keys
+    "f1": "F1", "f2": "F2", "f3": "F3", "f4": "F4", "f5": "F5", "f6": "F6",
+    "f7": "F7", "f8": "F8", "f9": "F9", "f10": "F10", "f11": "F11", "f12": "F12",
+
+    # Number keys (top row)
+    "0": "Digit0", "1": "Digit1", "2": "Digit2", "3": "Digit3", "4": "Digit4",
+    "5": "Digit5", "6": "Digit6", "7": "Digit7", "8": "Digit8", "9": "Digit9",
+    
+    # Letter keys
+    "a": "KeyA", "b": "KeyB", "c": "KeyC", "d": "KeyD", "e": "KeyE", "f": "KeyF",
+    "g": "KeyG", "h": "KeyH", "i": "KeyI", "j": "KeyJ", "k": "KeyK", "l": "KeyL",
+    "m": "KeyM", "n": "KeyN", "o": "KeyO", "p": "KeyP", "q": "KeyQ", "r": "KeyR",
+    "s": "KeyS", "t": "KeyT", "u": "KeyU", "v": "KeyV", "w": "KeyW", "x": "KeyX",
+    "y": "KeyY", "z": "KeyZ",
+    
+    # Arrow keys
+    "up": "ArrowUp", "down": "ArrowDown", "left": "ArrowLeft", "right": "ArrowRight",
+    "arrow_up": "ArrowUp", "arrow_down": "ArrowDown", "arrow_left": "ArrowLeft", "arrow_right": "ArrowRight",
+    
+    # Navigation keys
+    "home": "Home", "end": "End", "page_up": "PageUp", "page_down": "PageDown",
+    "pageup": "PageUp", "pagedown": "PageDown",
+    
+    # Editing keys
+    "backspace": "Backspace", "delete": "Delete", "insert": "Insert",
+    "enter": "Enter", "return": "Enter", "tab": "Tab", "escape": "Escape", "esc": "Escape",
+    
+    # Modifier keys
+    "shift": "Shift", "ctrl": "Control", "control": "Control", "alt": "Alt", "meta": "Meta",
+    "shift_left": "ShiftLeft", "ctrl_or_meta": "ControlOrMeta", "control_or_meta": "ControlOrMeta",
+    
+    # Punctuation and symbols
+    "space": " ", "spacebar": " ",
+    "backquote": "Backquote", "`": "Backquote", "backtick": "Backquote",
+    "minus": "Minus", "-": "Minus", "dash": "Minus",
+    "equal": "Equal", "=": "Equal", "equals": "Equal",
+    "backslash": "Backslash", "\\": "Backslash",
+    "bracket_left": "BracketLeft", "[": "BracketLeft",
+    "bracket_right": "BracketRight", "]": "BracketRight",
+    "semicolon": "Semicolon", ";": "Semicolon",
+    "quote": "Quote", "'": "Quote", "apostrophe": "Quote",
+    "comma": "Comma", ",": "Comma",
+    "period": "Period", ".": "Period", "dot": "Period",
+    "slash": "Slash", "/": "Slash",
+    
+    # Numpad keys
+    "numpad_0": "Numpad0", "numpad_1": "Numpad1", "numpad_2": "Numpad2", "numpad_3": "Numpad3",
+    "numpad_4": "Numpad4", "numpad_5": "Numpad5", "numpad_6": "Numpad6", "numpad_7": "Numpad7",
+    "numpad_8": "Numpad8", "numpad_9": "Numpad9",
+    "numpad_add": "NumpadAdd", "numpad_subtract": "NumpadSubtract",
+    "numpad_multiply": "NumpadMultiply", "numpad_divide": "NumpadDivide",
+    "numpad_decimal": "NumpadDecimal", "numpad_enter": "NumpadEnter",
+    
+    # Lock keys
+    "caps_lock": "CapsLock", "capslock": "CapsLock",
+    "num_lock": "NumLock", "numlock": "NumLock",
+    "scroll_lock": "ScrollLock", "scrolllock": "ScrollLock",
+    
+    # Common combinations (case-insensitive aliases)
+    "ENTER": "Enter", "ESCAPE": "Escape", "BACKSPACE": "Backspace", "DELETE": "Delete",
+    "TAB": "Tab", "SPACE": " ", "UP": "ArrowUp", "DOWN": "ArrowDown", 
+    "LEFT": "ArrowLeft", "RIGHT": "ArrowRight", "HOME": "Home", "END": "End",
+}
+
+
 class BrowserManager:
     """Manages Playwright browser instance with proper resource cleanup."""
     
     def __init__(self):
         self.headless = config.headless
+        self.browser_type = self._validate_browser_type(config.browser_type)
         self.page: Page | None = None
         self.screenshot_index = 0
         self.mouse_x = 0
@@ -86,9 +155,21 @@ class BrowserManager:
         self.crosshair_id = config.crosshair_id
         self._init_browser()
     
+    def _validate_browser_type(self, browser_type: str) -> str:
+        """Validate and return the browser type."""
+        browser_type = browser_type.lower()
+        if browser_type not in SUPPORTED_BROWSERS:
+            raise ValueError(
+                f"Unsupported browser type: {browser_type}. "
+                f"Supported browsers: {', '.join(sorted(SUPPORTED_BROWSERS))}"
+            )
+        return browser_type
+    
     def _init_browser(self):
         self.playwright: Playwright = sync_playwright().start()
-        self.browser: Browser = self.playwright.chromium.launch(headless=self.headless)
+        # Get the appropriate browser type from playwright
+        browser_launcher = getattr(self.playwright, self.browser_type)
+        self.browser: Browser = browser_launcher.launch(headless=self.headless)
     
     @property
     def browser_name(self) -> str:
@@ -186,3 +267,26 @@ class BrowserManager:
             page.mouse.move(self.mouse_x, self.mouse_y)
             return True
         return False
+
+    def get_key(self, key: str) -> str:
+        """Get the key from the key map."""
+        if key.lower() in KEY_MAP:
+            return KEY_MAP[key.lower()]
+        raise ValueError(
+            f"Key {key} not found. Supported keys: {', '.join(KEY_MAP.keys())}"
+        )
+
+    def key_down(self, key: str):
+        """Press and hold a key."""
+        playwright_key = self.get_key(key)
+        self.page.keyboard.down(playwright_key)
+
+    def key_press(self, key: str):
+        """Press a key."""
+        playwright_key = self.get_key(key)
+        self.page.keyboard.press(playwright_key)
+
+    def key_up(self, key: str):
+        """Release a key."""
+        playwright_key = self.get_key(key)
+        self.page.keyboard.up(playwright_key)

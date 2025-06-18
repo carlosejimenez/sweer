@@ -8,10 +8,10 @@ from pathlib import Path
 import click as cl
 import requests
 
-from sweer.config import Config
+from sweer.config import ClientConfig
 from sweer.utils import ScreenshotMode
 
-config = Config()
+config = ClientConfig()
 
 
 def _format_metadata_info(response):
@@ -22,7 +22,7 @@ def _format_metadata_info(response):
 
 
 def send_request(endpoint, method="GET", data=None):
-    url = f"{config.base_url}/{endpoint}"
+    url = f"http://localhost:{config.port}/{endpoint}"
     if method == "GET":
         response = requests.get(url)
     else:
