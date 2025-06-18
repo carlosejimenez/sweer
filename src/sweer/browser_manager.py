@@ -235,10 +235,12 @@ class BrowserManager:
     def take_screenshot(self) -> dict[str, Any]:
         """Capture screenshot with crosshair."""
         with self._browser_lock() as page:
+            # this retry logic is a hack to ensure the page is loaded
+            # (at least enough to inject the crosshair)
             for attempt in range(3):
                 if self._inject_crosshair(page, self.mouse_x, self.mouse_y):
                     break
-                if attempt < 2:
+                if attempt < 3:
                     time.sleep(self.screenshot_delay)
             time.sleep(self.screenshot_delay)
             screenshot_data = page.screenshot(type="png")

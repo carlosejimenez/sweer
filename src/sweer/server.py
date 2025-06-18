@@ -81,11 +81,11 @@ def _get_response_metadata() -> dict[str, Any]:
 def create_response(data: dict[str, Any], return_screenshot: bool) -> Response:
     """Create a JSON response with comprehensive metadata and optional screenshot."""
     response_data = {**data}
+    if return_screenshot:
+        response_data.update(browser_manager.take_screenshot())
     if "metadata" not in response_data:
         response_data["metadata"] = {}
     response_data["metadata"].update(_get_response_metadata())
-    if return_screenshot:
-        response_data.update(browser_manager.take_screenshot())
     return jsonify(response_data)
 
 
