@@ -8,10 +8,14 @@ from pathlib import Path
 import pytest
 import requests
 
+from sweer.config import Config
+
 
 TEST_SITE_DIR = Path(__file__).parent / "test_site"
 TEST_HTML_FILE = TEST_SITE_DIR / "index.html"
-BASE_URL = "http://localhost:8009"
+
+
+config = Config()
 
 
 @pytest.fixture(scope="module")
@@ -28,7 +32,7 @@ def sweer_backend():
 
 
 def send_request(endpoint, method="GET", data=None):
-    url = f"{BASE_URL}/{endpoint}"
+    url = f"{config.base_url}/{endpoint}"
     if method == "GET":
         response = requests.get(url)
     else:
@@ -38,14 +42,14 @@ def send_request(endpoint, method="GET", data=None):
 
 class TestInvalidRequests:
     def test_malformed_json_request(self, sweer_backend):
-        response = requests.post(f"{BASE_URL}/click", data="invalid json")
+        response = requests.post(f"{config.base_url}/click", data="invalid json")
         assert response.status_code == 400 or response.json()["status"] == "error", (
             "Malformed JSON should return 400 status code or error response"
         )
 
     def test_missing_content_type(self, sweer_backend):
         response = requests.post(
-            f"{BASE_URL}/click",
+            f"{config.base_url}/click",
             data='{"x": 100, "y": 100}',
             headers={"Content-Type": "text/plain"}
         )
@@ -59,7 +63,7 @@ class TestInvalidRequests:
 
     def test_empty_request_body(self, sweer_backend):
         response = requests.post(
-            f"{BASE_URL}/click",
+            f"{config.base_url}/click",
             json=None
         )
         data = response.json()
@@ -413,17 +417,17 @@ class TestInvalidWaitTime:
 
 class TestInvalidHTTPMethods:
     def test_get_on_post_endpoints(self, sweer_backend):
-        response = requests.get(f"{BASE_URL}/click")
+        response = requests.get(f"{config.base_url}/click")
         assert response.status_code == 405, (
             "GET request on POST-only endpoint should return 405 Method Not Allowed"
         )
-        response = requests.get(f"{BASE_URL}/goto")
+        response = requests.get(f"{config.base_url}/goto")
         assert response.status_code == 405, (
             "GET request on POST-only endpoint should return 405 Method Not Allowed"
         )
 
     def test_post_on_get_endpoints(self, sweer_backend):
-        response = requests.post(f"{BASE_URL}/screenshot", json={})
+        response = requests.post(f"{config.base_url}/screenshot", json={})
         assert response.status_code == 405, (
             "POST request on GET-only endpoint should return 405 Method Not Allowed"
         ) 

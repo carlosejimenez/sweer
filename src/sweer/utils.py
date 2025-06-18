@@ -1,8 +1,16 @@
 import functools
 import os
 
+from enum import Enum
 from pathlib import Path
 from flask import jsonify, request
+
+from dataclasses import field
+
+
+class ScreenshotMode(Enum):
+    SAVE = "save"  # saves screenshot to png file
+    PRINT = "print"  # prints base64 encoded screenshot to stdout
 
 
 def normalize_url(url: str) -> str:

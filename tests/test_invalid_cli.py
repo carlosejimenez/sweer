@@ -274,6 +274,7 @@ class TestEdgeCaseArguments:
             "Click command with zero coordinates should return zero exit code"
         )
 
+    @pytest.mark.slow
     def test_very_long_text_input(self, sweer_backend):
         run_sweer_command("open", str(TEST_HTML_FILE))
         long_text = "a" * 10000
