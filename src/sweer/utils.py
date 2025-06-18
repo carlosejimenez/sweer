@@ -1,11 +1,10 @@
-import functools
-import os
+from __future__ import annotations
 
+import functools
 from enum import Enum
 from pathlib import Path
-from flask import jsonify, request
 
-from dataclasses import field
+from flask import jsonify, request
 
 
 class ScreenshotMode(Enum):

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import subprocess
 import time
 from pathlib import Path
@@ -9,7 +8,6 @@ import pytest
 import requests
 
 from sweer.config import Config
-
 
 TEST_SITE_DIR = Path(__file__).parent / "test_site"
 TEST_HTML_FILE = TEST_SITE_DIR / "index.html"
@@ -221,6 +219,9 @@ class TestInvalidURLs:
             "url": "", "return_screenshot": False
         })
         data = response.json()
+        assert data["status"] == "success", (
+            "Empty URL should return success status (empty url represents cwd)"
+        )
 
 
 class TestInvalidParameters:
@@ -397,6 +398,9 @@ class TestInvalidWaitTime:
             "ms": -1000, "return_screenshot": False
         })
         data = response.json()
+        assert data["status"] == "error", (
+            "Wait with negative time should return error status"
+        )
 
     def test_invalid_wait_time_type(self, sweer_backend):
         response = send_request("goto", "POST", {

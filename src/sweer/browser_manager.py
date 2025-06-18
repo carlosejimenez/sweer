@@ -1,8 +1,10 @@
+from __future__ import annotations
+
+import base64
+import contextlib
 import threading
 import time
-import contextlib
-import base64
-from typing import Any, Optional
+from typing import Any
 
 from playwright.sync_api import Browser, Page, Playwright, sync_playwright
 
@@ -72,9 +74,9 @@ class BrowserManager:
     """Manages Playwright browser instance with proper resource cleanup."""
     
     def __init__(self):
-        self.playwright: Optional[Playwright] = None
-        self.browser: Optional[Browser] = None
-        self.page: Optional[Page] = None
+        self.playwright: Playwright | None = None
+        self.browser: Browser | None = None
+        self.page: Page | None = None
         self.screenshot_index = 0
         self.mouse_x = 0
         self.mouse_y = 0

@@ -2,16 +2,14 @@
 from __future__ import annotations
 
 import base64
-import os
 import sys
 from pathlib import Path
-from enum import Enum
 
 import click as cl
 import requests
 
-from sweer.utils import ScreenshotMode
 from sweer.config import Config
+from sweer.utils import ScreenshotMode
 
 config = Config()
 

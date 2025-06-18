@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 
-
 TEST_SITE_DIR = Path(__file__).parent / "test_site"
 TEST_HTML_FILE = TEST_SITE_DIR / "index.html"
 
@@ -25,12 +24,11 @@ def sweer_backend():
 
 
 def run_sweer_command(*args):
-    result = subprocess.run(
+    return subprocess.run(
         ["sweer"] + list(args),
         capture_output=True,
         text=True
     )
-    return result
 
 
 class TestInvalidCLICommands:
@@ -279,6 +277,9 @@ class TestEdgeCaseArguments:
         run_sweer_command("open", str(TEST_HTML_FILE))
         long_text = "a" * 10000
         result = run_sweer_command("type", long_text)
+        assert result.returncode == 0, (
+            "Type command with very long text should return zero exit code"
+        )
 
     def test_special_characters_in_text(self, sweer_backend):
         run_sweer_command("open", str(TEST_HTML_FILE))

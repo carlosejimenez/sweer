@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
 """Sweer server ‒ Flask + Playwright backend.
 """
+from __future__ import annotations
+
 import atexit
 import functools
 import signal
 import sys
 import time
-from typing import Any, List
+from typing import Any
 
-from flask import Flask, jsonify, request, Response
+from flask import Flask, Response, jsonify, request
 
 from sweer.browser_manager import BrowserManager
-from sweer.utils import catch_error, validate_request, normalize_url
 from sweer.config import Config
-
+from sweer.utils import catch_error, normalize_url, validate_request
 
 config = Config()
 
@@ -176,7 +177,7 @@ def move():
 @catch_error
 @require_website_open
 def drag():
-    path: List[List[int]] = request.json["path"]
+    path: list[list[int]] = request.json["path"]
     return_screenshot = request.json["return_screenshot"]
     if not path or len(path) < 2:
         return jsonify({"status": "error", "message": "Path needs at least two points"})
@@ -294,7 +295,7 @@ def wait():
 @catch_error
 @require_website_open
 def keypress():
-    keys: List[str] = request.json["keys"]
+    keys: list[str] = request.json["keys"]
     return_screenshot = request.json["return_screenshot"]
     if not isinstance(keys, list):
         return jsonify({"status": "error", "message": "Keys must be a list"})
