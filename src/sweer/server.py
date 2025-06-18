@@ -256,6 +256,11 @@ def close_browser():
 def set_window_size():
     width, height = request.json["width"], request.json["height"]
     return_screenshot = request.json["return_screenshot"]
+    if width <= 0 or height <= 0:
+        return jsonify({
+            "status": "error", 
+            "message": f"Invalid dimensions ({width},{height}). Must be positive"
+        })
     with browser_manager._browser_lock() as page:
         page.set_viewport_size({"width": width, "height": height})
         browser_manager.window_width = width
@@ -277,7 +282,7 @@ def screenshot():
 @catch_error
 @require_website_open
 def click():
-    x, y = request.json["x"], request.json["y"]
+    x, y = round(request.json["x"]), round(request.json["y"])
     button = request.json["button"]
     return_screenshot = request.json["return_screenshot"]
     x_valid, y_valid = browser_manager.validate_coordinates(x, y)
@@ -458,6 +463,8 @@ def wait():
 def keypress():
     keys: List[str] = request.json["keys"]
     return_screenshot = request.json["return_screenshot"]
+    if not isinstance(keys, list):
+        return jsonify({"status": "error", "message": "Keys must be a list"})
     if not keys:
         return jsonify({"status": "error", "message": "Keys list empty"})
     with browser_manager._browser_lock() as page:
