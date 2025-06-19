@@ -12,8 +12,7 @@ from sweer.config import ServerConfig
 
 config = ServerConfig()
 
-# Supported browser types
-SUPPORTED_BROWSERS = {"chromium", "firefox", "webkit"}
+SUPPORTED_BROWSERS = {"chromium", "firefox"}
 
 CROSSHAIR_JS = """
 ([x, y, id]) => {
@@ -167,9 +166,16 @@ class BrowserManager:
     
     def _init_browser(self):
         self.playwright: Playwright = sync_playwright().start()
-        # Get the appropriate browser type from playwright
         browser_launcher = getattr(self.playwright, self.browser_type)
-        self.browser: Browser = browser_launcher.launch(headless=self.headless)
+        executable_path = None
+        if self.browser_type == "chromium" and config.chromium_executable_path:
+            executable_path = config.chromium_executable_path
+        elif self.browser_type == "firefox" and config.firefox_executable_path:
+            executable_path = config.firefox_executable_path
+        launch_options = {"headless": self.headless}
+        if executable_path:
+            launch_options["executable_path"] = executable_path
+        self.browser: Browser = browser_launcher.launch(**launch_options)
     
     @property
     def browser_name(self) -> str:

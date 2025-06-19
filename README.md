@@ -38,10 +38,6 @@ You can configure which browser backend to use:
 export SWEER_BROWSER_TYPE="firefox"
 sweer-backend
 
-# Use WebKit (Safari engine)
-export SWEER_BROWSER_TYPE="webkit"
-sweer-backend
-
 # Use Chromium (default)
 export SWEER_BROWSER_TYPE="chromium"
 sweer-backend
@@ -49,8 +45,29 @@ sweer-backend
 
 Supported browser types:
 - `chromium` (default) - Uses Chromium browser
-- `firefox` - Uses Firefox browser  
-- `webkit` - Uses WebKit browser (Safari engine)
+- `firefox` - Uses Firefox browser
+
+#### Custom Browser Executable Paths
+
+You can specify custom installations of browsers instead of using Playwright's default bundled browsers:
+
+```bash
+# Use a custom Chromium installation
+export SWEER_CHROMIUM_EXECUTABLE_PATH="/usr/bin/chromium-browser"
+export SWEER_BROWSER_TYPE="chromium"
+sweer-backend
+
+# Use a custom Firefox installation
+export SWEER_FIREFOX_EXECUTABLE_PATH="/usr/bin/firefox"
+export SWEER_BROWSER_TYPE="firefox"
+sweer-backend
+```
+
+This is useful when:
+- You want to use a system-installed browser instead of Playwright's bundled version
+- You need to use a specific browser version
+- You want to use a browser with custom configurations or extensions pre-installed
+- You're working in an environment where Playwright's bundled browsers aren't available
 
 ### Other Configuration Options
 
