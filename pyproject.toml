@@ -18,8 +18,7 @@ requires-python = ">=3.9"
 license = {file = "LICENSE.md"}
 keywords = ["nlp", "agents", "code"]
 authors = [
-  {name = "Kilian Lieret", email = "kl5675@princeton.edu" },
-  {name = "Carlos E. Jimenez", email = "carlosej@princeton.edu" },
+  {name = "SWE-bench team", email = "support@swebench.com" },
 ]
 
 # Classifiers help users find your project by categorizing it.
