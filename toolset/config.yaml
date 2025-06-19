@@ -1,20 +1,20 @@
 tools:
   open_site:
     signature: "open_site <url>"
-    docstring: "Open the specified website URL"
+    docstring: "Open the specified website URL or local file path"
     arguments:
       - name: url
         type: string
         description: "The URL to open (can be a web URL or file path)"
         required: true
   
-  close_window:
-    signature: "close_window"
-    docstring: "Close the currently open window"
+  close_site:
+    signature: "close_site"
+    docstring: "Close the currently open browser window"
     arguments: []
   
-  screenshot:
-    signature: "screenshot"
+  screenshot_site:
+    signature: "screenshot_site"
     docstring: "Take a screenshot of the current page"
     arguments: []
   
@@ -68,7 +68,7 @@ tools:
     arguments:
       - name: path
         type: string
-        description: "JSON array of coordinate pairs for the drag path"
+        description: "JSON array of coordinate pairs for the drag path (e.g., '[[0,0],[100,100]]')"
         required: true
   
   type_text:
@@ -80,8 +80,8 @@ tools:
         description: "Text to type"
         required: true
   
-  scroll:
-    signature: "scroll <scroll_x> <scroll_y>"
+  scroll_on_page:
+    signature: "scroll_on_page <scroll_x> <scroll_y>"
     docstring: "Scroll by the specified number of pixels on the current page"
     arguments:
       - name: scroll_x
@@ -126,18 +126,18 @@ tools:
         description: "Time to wait in milliseconds"
         required: true
   
-  press_keys:
-    signature: "press_keys <keys>"
+  press_keys_on_page:
+    signature: "press_keys_on_page <keys>"
     docstring: "Press the specified keys (JSON format: [\"key1\", \"key2\"]) on the current page"
     arguments:
       - name: keys
         type: string
-        description: "JSON array of keys to press"
+        description: "JSON array of keys to press (e.g., '[\"ctrl\", \"c\"]')"
         required: true
   
-  set_window_size:
-    signature: "set_window_size <width> <height>"
-    docstring: "Set the browser window size"
+  set_browser_window_size:
+    signature: "set_browser_window_size <width> <height>"
+    docstring: "Set the browser window size to the specified dimensions"
     arguments:
       - name: width
         type: integer

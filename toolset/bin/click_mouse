@@ -33,6 +33,6 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("x", type=int)
     parser.add_argument("y", type=int)
-    parser.add_argument("--button", "-b", default="left", choices=["left", "right"])
+    parser.add_argument("button", nargs="?", default="left", choices=["left", "right"])
     args = parser.parse_args()
     click(args.x, args.y, args.button)

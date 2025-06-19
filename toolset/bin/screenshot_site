@@ -16,7 +16,7 @@ from sweer_utils import ScreenshotMode, _print_response_with_metadata, _autosave
 config = ClientConfig()
 
 
-def screenshot(output):
+def screenshot():
     """Capture a screenshot and handle it according to the default config.screenshot_mode."""
     response = send_request(config.port, "screenshot", "GET")
     if response is None:
@@ -24,24 +24,10 @@ def screenshot(output):
     screenshot_data = response["screenshot"]
     _print_response_with_metadata(response)
     if config.screenshot_mode == ScreenshotMode.SAVE:
-        if output:
-            path = Path(output)
-            path.write_bytes(base64.b64decode(screenshot_data))
-            print(f"Screenshot saved to {path}")
-        else:
-            _handle_screenshot(screenshot_data, ScreenshotMode.SAVE)
+        _handle_screenshot(screenshot_data, ScreenshotMode.SAVE)
     else:
         _handle_screenshot(screenshot_data, ScreenshotMode.PRINT)
 
 
 if __name__ == "__main__":
-    parser = ArgumentParser()
-    parser.add_argument(
-        "--output",
-        "-o",
-        type=str,
-        help="Output path for the screenshot (only used in save mode).",
-        default=None,
-    )
-    args = parser.parse_args()
-    screenshot(args.output)
+    screenshot()

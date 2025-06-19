@@ -1,93 +1,169 @@
-# SWEer
+# Sweer - Browser Automation Toolset
 
-## Dev setup
+Sweer is a browser automation toolset that provides command-line tools for web interaction, built on top of Playwright and Flask. It's designed for automated testing, web scraping, and browser automation tasks.
 
-```bash
-pip install -e '.[dev]'
-pre-commit install
-pytest
-```
+## Installation
 
-## Usage
-
-First, start the backend
+Run the installation script to set up all dependencies:
 
 ```bash
-sweer-backend
+cd toolset
+./install.sh
 ```
 
-Next, start running commands
+This will:
+- Install Python dependencies (Flask, Requests, Playwright)
+- Install Playwright browser dependencies
+- Set up Chromium browser executable
+- Configure environment variables
+- Start the Sweer server in the background
 
-```bash
-# If argument is an existing local path, will try to open local file instead
-sweer open theguardian.com
-sweer screenshot
-sweer click 0
-```
+## Architecture
+
+Sweer uses a client-server architecture:
+
+- **Server**: Flask backend (`run_sweer_server`) that manages browser instances via Playwright
+- **Client Tools**: Command-line executables in `toolset/bin/` that communicate with the server
+- **Library**: Core modules in `toolset/lib/` providing the automation functionality
+
+## Available Tools
+
+### Core Browser Operations
+- `open_site <url>` - Open websites or local files
+- `close_site` - Close the browser
+- `screenshot_site` - Take screenshots
+- `reload_page` - Reload current page
+- `navigate_back` / `navigate_forward` - Browser navigation
+
+### Mouse & Input Operations
+- `click_mouse <x> <y> [<button>]` - Click at coordinates (shows red crosshair)
+- `double_click_mouse <x> <y>` - Double-click at coordinates
+- `move_mouse <x> <y>` - Move mouse to coordinates
+- `drag_mouse <path>` - Drag along a JSON path: `'[[x1,y1],[x2,y2]]'`
+- `type_text <text>` - Type text at focused element
+- `press_keys_on_page <keys>` - Press keys as JSON: `'["ctrl", "c"]'`
+
+### Page Operations
+- `scroll_on_page <x> <y>` - Scroll by pixel amounts
+- `execute_script_on_page <script>` - Run JavaScript on page
+- `set_browser_window_size <width> <height>` - Resize browser window
+- `wait_time <ms>` - Wait for specified milliseconds
+
+## Quick Start
+
+1. **Start the server** (done automatically by `install.sh`):
+   ```bash
+   run_sweer_server &
+   ```
+
+2. **Open a website**:
+   ```bash
+   open_site https://example.com
+   # or open a local file
+   open_site /path/to/file.html
+   ```
+
+3. **Take a screenshot**:
+   ```bash
+   screenshot_site
+   ```
+
+4. **Interact with the page**:
+   ```bash
+   click_mouse 100 200
+   type_text "Hello World"
+   press_keys_on_page '["enter"]'
+   ```
 
 ## Configuration
 
-SWEer can be configured using environment variables:
+Configure Sweer using environment variables:
 
 ### Browser Configuration
 
-You can configure which browser backend to use:
-
 ```bash
-# Use Firefox instead of the default Chromium
-export SWEER_BROWSER_TYPE="firefox"
-sweer-backend
+# Browser type (default: chromium)
+export SWEER_BROWSER_TYPE="chromium"  # or "firefox"
 
-# Use Chromium (default)
-export SWEER_BROWSER_TYPE="chromium"
-sweer-backend
-```
-
-Supported browser types:
-- `chromium` (default) - Uses Chromium browser
-- `firefox` - Uses Firefox browser
-
-#### Custom Browser Executable Paths
-
-You can specify custom installations of browsers instead of using Playwright's default bundled browsers:
-
-```bash
-# Use a custom Chromium installation
-export SWEER_CHROMIUM_EXECUTABLE_PATH="/usr/bin/chromium-browser"
-export SWEER_BROWSER_TYPE="chromium"
-sweer-backend
-
-# Use a custom Firefox installation
+# Custom browser paths
+export SWEER_CHROMIUM_EXECUTABLE_PATH="/usr/bin/google-chrome"
 export SWEER_FIREFOX_EXECUTABLE_PATH="/usr/bin/firefox"
-export SWEER_BROWSER_TYPE="firefox"
-sweer-backend
+
+# Display mode (default: headless)
+export SWEER_HEADLESS="0"  # Set to 0 for visible browser window
 ```
 
-This is useful when:
-- You want to use a system-installed browser instead of Playwright's bundled version
-- You need to use a specific browser version
-- You want to use a browser with custom configurations or extensions pre-installed
-- You're working in an environment where Playwright's bundled browsers aren't available
-
-### Other Configuration Options
+### Window and Screenshot Settings
 
 ```bash
-# Enable automatic screenshotting after each action
-export SWEER_AUTOSCREENSHOT="1"
-
-# Configure window size
+# Browser window size
 export SWEER_WINDOW_WIDTH="1280"
 export SWEER_WINDOW_HEIGHT="720"
 
-# Run browser in headed mode (visible window)
-export SWEER_HEADLESS="0"
-
-# Change screenshot delay (in seconds)
-export SWEER_SCREENSHOT_DELAY="0.5"
+# Screenshot behavior
+export SWEER_AUTOSCREENSHOT="1"        # Auto-screenshot after actions
+export SWEER_SCREENSHOT_MODE="save"    # "save" or "print"
+export SWEER_SCREENSHOT_DELAY="0.2"    # Delay in seconds
 ```
 
-If navigating a lot, you can activate automatic screenshotting with
+### Server Configuration
 
 ```bash
-export SWEER_AUTOSCREENSHOT="1"
+# Server port (default: 8009)
+export SWEER_PORT="8009"
+
+# Connection timeout
+export SWEER_RECONNECT_TIMEOUT="15"
 ```
+
+## Examples
+
+### Web Scraping Example
+```bash
+# Open a news site
+open_site https://news.ycombinator.com
+
+# Take a screenshot
+screenshot_site
+
+# Click on first story
+click_mouse 100 150
+
+# Scroll down
+scroll_on_page 0 300
+
+# Go back
+navigate_back
+```
+
+### Form Automation Example
+```bash
+# Open a form
+open_site https://example.com/contact
+
+# Click in name field
+click_mouse 200 100
+
+# Type name
+type_text "John Doe"
+
+# Tab to next field
+press_keys_on_page '["tab"]'
+
+# Type email
+type_text "john@example.com"
+
+# Submit form
+press_keys_on_page '["enter"]'
+```
+
+### JavaScript Execution Example
+```bash
+# Execute custom JavaScript
+execute_script_on_page "document.querySelector('h1').style.color = 'red'"
+
+# Get page info
+execute_script_on_page "console.log(document.title)"
+```
+
+## File Structure
