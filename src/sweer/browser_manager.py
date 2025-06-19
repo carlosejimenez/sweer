@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import base64
 import contextlib
+import os
 import threading
 import time
-import os
 from typing import Any
 
 from playwright.sync_api import Browser, Page, Playwright, sync_playwright
@@ -160,10 +160,11 @@ class BrowserManager:
         """Validate and return the browser type."""
         browser_type = browser_type.lower()
         if browser_type not in SUPPORTED_BROWSERS:
-            raise ValueError(
+            msg = (
                 f"Unsupported browser type: {browser_type}. "
                 f"Supported browsers: {', '.join(sorted(SUPPORTED_BROWSERS))}"
             )
+            raise ValueError(msg)
         return browser_type
     
     def _init_browser(self):
@@ -286,9 +287,8 @@ class BrowserManager:
         """Get the key from the key map."""
         if key.lower() in KEY_MAP:
             return KEY_MAP[key.lower()]
-        raise ValueError(
-            f"Key {key} not found. Supported keys: {', '.join(KEY_MAP.keys())}"
-        )
+        msg = f"Key {key} not found. Supported keys: {', '.join(KEY_MAP.keys())}"
+        raise ValueError(msg)
 
     def key_down(self, key: str):
         """Press and hold a key."""

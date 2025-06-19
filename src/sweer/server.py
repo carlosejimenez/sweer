@@ -332,7 +332,7 @@ def keypress():
         return create_response({"status": "error", "message": "Keys must be a list"}, False)
     if not keys:
         return create_response({"status": "error", "message": "Keys list empty"}, False)
-    with browser_manager._browser_lock() as page:
+    with browser_manager._browser_lock() as _:
         for key in keys[:-1]:
             browser_manager.key_down(key)
         browser_manager.key_press(keys[-1])

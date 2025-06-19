@@ -1,20 +1,20 @@
 from __future__ import annotations
 
-import subprocess
-import time
 import json
 import os
 import socket
+import subprocess
+import time
 from pathlib import Path
 
 import pytest
+
 
 def get_free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(('', 0))
         s.listen(1)
-        port = s.getsockname()[1]
-    return port
+        return s.getsockname()[1]
 
 
 TEST_SITE_DIR = Path(__file__).parent / "test_site"
@@ -52,7 +52,7 @@ def run_sweer_command(*args):
 
 
 class TestKeyPress:
-    @pytest.mark.slow()
+    @pytest.mark.slow
     def test_every_key(self, sweer_backend):
         result = run_sweer_command("open", str(TEST_HTML_FILE))
         assert result.returncode == 0, (
