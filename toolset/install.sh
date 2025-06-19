@@ -4,6 +4,10 @@ pip install flask requests playwright
 
 playwright install-deps chromium
 
+if [ -x /usr/bin/python3 ]; then
+    /usr/bin/python3 -m pip install requests playwright flask
+fi
+
 if [ -f /usr/bin/google-chrome ]; then
     export SWEER_CHROMIUM_EXECUTABLE_PATH=/usr/bin/google-chrome
 elif [ -f /usr/bin/chromium ]; then
