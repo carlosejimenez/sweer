@@ -5,16 +5,20 @@ from __future__ import annotations
 
 import atexit
 import functools
+import os
 import signal
 import sys
 import time
 from typing import Any
 
+lib_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'lib')
+sys.path.insert(0, lib_path)
+
 from flask import Flask, Response, jsonify, request
 
-from sweer.browser_manager import BrowserManager
-from sweer.config import ServerConfig
-from sweer.utils import catch_error, normalize_url, validate_request
+from browser_manager import BrowserManager
+from sweer_config import ServerConfig
+from sweer_utils import catch_error, normalize_url, validate_request
 
 config = ServerConfig()
 

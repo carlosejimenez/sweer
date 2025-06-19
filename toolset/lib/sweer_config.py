@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 
-from sweer.utils import ScreenshotMode
+from sweer_utils import ScreenshotMode
 
 
 @dataclass
@@ -14,7 +14,6 @@ class ClientConfig:
     screenshot_mode: ScreenshotMode = ScreenshotMode(
         os.getenv("SWEER_SCREENSHOT_MODE", ScreenshotMode.SAVE.value)
     )
-    cli_context_settings: dict = field(default_factory=lambda: {"allow_interspersed_args": False})
 
 
 @dataclass

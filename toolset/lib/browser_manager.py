@@ -9,7 +9,7 @@ from typing import Any
 
 from playwright.sync_api import Browser, Page, Playwright, sync_playwright
 
-from sweer.config import ServerConfig
+from sweer_config import ServerConfig
 
 config = ServerConfig()
 
