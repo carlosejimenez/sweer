@@ -209,6 +209,14 @@ class TestInvalidKeypressCommands:
         )
         assert "Missing argument" in result.stderr or "Usage:" in result.stderr
 
+    def test_keypress_invalid_json(self, sweer_backend):
+        run_sweer_command("open", str(TEST_HTML_FILE))
+        result = run_sweer_command("keypress", "invalid json")
+        assert result.returncode == 0, (
+            "Keypress command with invalid JSON should return zero exit code but print error to stderr"
+        )
+        assert "ERROR:" in result.stderr and "Keys must be valid JSON" in result.stderr
+
 
 class TestInvalidSetWindowSizeCommands:
     def test_set_window_size_missing_arguments(self, sweer_backend):
@@ -241,9 +249,10 @@ class TestInvalidSetWindowSizeCommands:
             "Set-window-size command with negative width should return non-zero exit code"
         )
         result = run_sweer_command("set-window-size", "800", "-600")
-        assert result.returncode != 0, (
-            "Set-window-size command with negative height should return non-zero exit code"
+        assert result.returncode == 0, (
+            "Set-window-size command with negative height should return zero exit code but print error to stderr"
         )
+        assert "ERROR:" in result.stderr and "Invalid dimensions" in result.stderr
 
 
 class TestInvalidOpenCommands:
@@ -275,9 +284,10 @@ class TestInvalidDragCommands:
     def test_drag_invalid_json_path(self, sweer_backend):
         run_sweer_command("open", str(TEST_HTML_FILE))
         result = run_sweer_command("drag", "invalid json")
-        assert result.returncode != 0, (
-            "Drag command with invalid JSON path should return non-zero exit code"
+        assert result.returncode == 0, (
+            "Drag command with invalid JSON path should return zero exit code but print error to stderr"
         )
+        assert "ERROR:" in result.stderr and "Path must be valid JSON" in result.stderr
 
 
 class TestInvalidOptionCombinations:
@@ -297,9 +307,10 @@ class TestInvalidOptionCombinations:
 class TestEdgeCaseArguments:
     def test_extremely_large_coordinates(self, sweer_backend):
         result = run_sweer_command("click", "999999999", "999999999")
-        assert result.returncode != 0, (
-            "Click command with extremely large coordinates should return non-zero exit code"
+        assert result.returncode == 0, (
+            "Click command with extremely large coordinates should return zero exit code but print error to stderr"
         )
+        assert "ERROR:" in result.stderr and "Invalid coordinates" in result.stderr
 
     def test_zero_coordinates(self, sweer_backend):
         run_sweer_command("open", str(TEST_HTML_FILE))
