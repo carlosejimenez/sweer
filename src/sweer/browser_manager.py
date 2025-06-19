@@ -4,6 +4,7 @@ import base64
 import contextlib
 import threading
 import time
+import os
 from typing import Any
 
 from playwright.sync_api import Browser, Page, Playwright, sync_playwright
@@ -174,8 +175,12 @@ class BrowserManager:
         elif self.browser_type == "firefox" and config.firefox_executable_path:
             executable_path = config.firefox_executable_path
         launch_options = {"headless": self.headless}
-        if executable_path:
+        if executable_path and os.path.exists(executable_path):
             launch_options["executable_path"] = executable_path
+        elif executable_path:
+            print(
+                f"Warning: Executable path '{executable_path}' does not exist, using default browser"
+            )
         self.browser: Browser = browser_launcher.launch(**launch_options)
     
     @property
