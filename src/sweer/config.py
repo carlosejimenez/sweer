@@ -26,7 +26,7 @@ class ServerConfig:
     headless: bool = os.getenv("SWEER_HEADLESS", "1") != "0"
     screenshot_delay: float = float(os.getenv("SWEER_SCREENSHOT_DELAY", 0.2))
     browser_type: str = os.getenv("SWEER_BROWSER_TYPE", "chromium")
-    # Custom browser executable paths
+    reconnect_timeout: float = float(os.getenv("SWEER_RECONNECT_TIMEOUT", 15))
     chromium_executable_path: str | None = os.getenv("SWEER_CHROMIUM_EXECUTABLE_PATH")
     firefox_executable_path: str | None = os.getenv("SWEER_FIREFOX_EXECUTABLE_PATH")
     crosshair_id: str = "__sweer_crosshair__"

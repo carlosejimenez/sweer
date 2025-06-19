@@ -151,6 +151,7 @@ class BrowserManager:
         self.window_width = config.window_width
         self.window_height = config.window_height
         self.screenshot_delay = config.screenshot_delay
+        self.reconnect_timeout = config.reconnect_timeout
         self.crosshair_id = config.crosshair_id
         self._init_browser()
     
@@ -243,11 +244,11 @@ class BrowserManager:
         with self._browser_lock() as page:
             # this retry logic is a hack to ensure the page is loaded
             # (at least enough to inject the crosshair)
-            for attempt in range(3):
+            timeout = time.time() + self.reconnect_timeout
+            while time.time() < timeout:
                 if self._inject_crosshair(page, self.mouse_x, self.mouse_y):
                     break
-                if attempt < 3:
-                    time.sleep(self.screenshot_delay)
+                time.sleep(max(0.3, self.screenshot_delay))
             time.sleep(self.screenshot_delay)
             screenshot_data = page.screenshot(type="png")
             self._remove_crosshair(page)
